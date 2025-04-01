@@ -11,6 +11,7 @@
 		<Authors>dhq_boiler</Authors>
 		<Description>Seed data management utility for Entity Framework Core. Generates seed data for EF Core from hierarchical object models and automatically manages foreign keys.</Description>
 		<PackageTags>entityframework;efcore;seed;data;migration</PackageTags>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	</PropertyGroup>
 
 	<ItemGroup>
