@@ -335,6 +335,7 @@ public class ApplyToContextTests
     {
         // Arrange - First add entities to database
         var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var publisher = new Publisher { Id = 1, Name = "Test Publisher", Address = "Test Address" };
         var book = new Book
         {
             Id = 1,
@@ -344,18 +345,22 @@ public class ApplyToContextTests
             PublicationYear = 2022,
             Category = category,
             CategoryId = 1,
+            Publisher = publisher,
             PublisherId = 1
         };
 
         using (var context = new LibraryDbContext(_options))
         {
+            // Explicitly add all required related entities
             context.Categories.Add(category);
+            context.Publishers.Add(publisher);
             context.Books.Add(book);
             context.SaveChanges();
         }
 
         // Now update entities
         var updatedCategory = new Category { Id = 1, Name = "Updated Fiction", Description = "Updated fiction books" };
+        var updatedPublisher = new Publisher { Id = 1, Name = "Updated Publisher", Address = "Test Address" }; // Keep original address
         var updatedBook = new Book
         {
             Id = 1,
@@ -365,6 +370,7 @@ public class ApplyToContextTests
             PublicationYear = 2023, // Changed year
             Category = updatedCategory,
             CategoryId = 1,
+            Publisher = updatedPublisher,
             PublisherId = 1
         };
 
@@ -380,13 +386,23 @@ public class ApplyToContextTests
         // Assert
         using (var context = new LibraryDbContext(_options))
         {
-            var updatedSavedBook = context.Books.Include(b => b.Category).First();
+            var updatedSavedBook = context.Books
+                .Include(b => b.Category)
+                .Include(b => b.Publisher)
+                .First();
+
             Assert.That(updatedSavedBook.Title, Is.EqualTo("Updated Test Book"));
             Assert.That(updatedSavedBook.Author, Is.EqualTo("Updated Author"));
             Assert.That(updatedSavedBook.ISBN, Is.EqualTo("0987654321"));
             Assert.That(updatedSavedBook.PublicationYear, Is.EqualTo(2023));
+
+            // Verify updated category
             Assert.That(updatedSavedBook.Category.Name, Is.EqualTo("Updated Fiction"));
             Assert.That(updatedSavedBook.Category.Description, Is.EqualTo("Updated fiction books"));
+
+            // Verify publisher updates
+            Assert.That(updatedSavedBook.Publisher.Name, Is.EqualTo("Updated Publisher"));
+            Assert.That(updatedSavedBook.Publisher.Address, Is.EqualTo("Test Address"));
         }
     }
 
