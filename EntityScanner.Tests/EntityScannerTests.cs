@@ -335,5 +335,104 @@ namespace EntityScanner.Tests
                 Assert.That(loadedBook.Authors[0].Author.Name, Is.EqualTo("Jon Smith"));
             }
         }
+
+        [Test]
+        public void ApplyToModelBuilder_ShouldApplySeedDataToDatabase()
+        {
+            // 準備（Arrange）
+            var category = new Category { Id = 1, Name = "小説", Description = "フィクション書籍" };
+
+            // Bookの全ての必須プロパティに値を設定
+            var book = new Book
+            {
+                Id = 1,
+                Title = "テスト本",
+                Author = "テスト著者",
+                ISBN = "1234567890",
+                PublicationYear = 2022,
+                CategoryId = 1,  // 外部キーを明示的に設定
+                PublisherId = 1  // Publisher関連の外部キーも設定
+            };
+
+            // カテゴリーとの関連を設定（クラスなので両方向から設定）
+            book.Category = category;
+            category.Books.Add(book);
+
+            // エンティティをスキャナーに登録
+            _entityScanner.RegisterEntity(category);  // カテゴリーを先に登録
+            _entityScanner.RegisterEntity(book);
+
+            // テスト用のカスタムDbContextを作成
+            var dbName = $"LibraryTestDb_{Guid.NewGuid()}";
+            var options = new DbContextOptionsBuilder<LibraryDbContext>()
+                .UseInMemoryDatabase(databaseName: dbName)
+                .Options;
+
+            // OnModelCreatingでシードデータを適用するカスタムコンテキストを作成
+            using (var seedContext = new TestLibraryDbContext(options, _entityScanner))
+            {
+                // データベースの作成を強制
+                seedContext.Database.EnsureCreated();
+            }
+
+            // 検証
+            using (var context = new LibraryDbContext(options))
+            {
+                var books = context.Books.ToList();
+                Assert.That(books, Has.Count.EqualTo(1));
+                Assert.That(books[0].Id, Is.EqualTo(1));
+                Assert.That(books[0].Title, Is.EqualTo("テスト本"));
+
+                var categories = context.Categories.ToList();
+                Assert.That(categories, Has.Count.EqualTo(1));
+                Assert.That(categories[0].Id, Is.EqualTo(1));
+                Assert.That(categories[0].Name, Is.EqualTo("小説"));
+            }
+        }
+
+        [Test]
+        public void ApplyToModelBuilder_ShouldGenerateCorrectSeedData()
+        {
+            // 準備（Arrange）
+            var category = new Category { Id = 1, Name = "小説", Description = "フィクション書籍" };
+            var book = new Book
+            {
+                Id = 1,
+                Title = "テスト本",
+                Author = "テスト著者",
+                ISBN = "1234567890",
+                PublicationYear = 2022,
+                CategoryId = 1,
+                PublisherId = 1
+            };
+
+            // エンティティを登録
+            _entityScanner.RegisterEntity(category);
+            _entityScanner.RegisterEntity(book);
+
+            // GetSeedDataメソッドを使用してシードデータを取得し、内容を検証
+            var bookSeedData = _entityScanner.GetSeedData<Book>().ToList();
+            var categorySeedData = _entityScanner.GetSeedData<Category>().ToList();
+
+            // 検証：必要なプロパティがすべて含まれているか
+            Assert.That(bookSeedData, Has.Count.EqualTo(1), "Book seed data should have 1 item");
+            Assert.That(categorySeedData, Has.Count.EqualTo(1), "Category seed data should have 1 item");
+
+            // BookのシードデータをDictionaryとして取得して内容を検証
+            var bookSeed = bookSeedData[0] as IDictionary<string, object>;
+            Assert.That(bookSeed, Is.Not.Null, "Book seed data should be convertible to IDictionary");
+            Assert.That(bookSeed.ContainsKey("Id"), Is.True, "Book seed data should contain Id");
+            Assert.That(bookSeed["Id"], Is.EqualTo(1), "Book Id should be 1");
+            Assert.That(bookSeed.ContainsKey("Title"), Is.True, "Book seed data should contain Title");
+            Assert.That(bookSeed["Title"], Is.EqualTo("テスト本"), "Book Title should be テスト本");
+            // 必要に応じて他のプロパティも検証
+
+            // カテゴリのシードデータも同様に検証
+            var categorySeed = categorySeedData[0] as IDictionary<string, object>;
+            Assert.That(categorySeed, Is.Not.Null, "Category seed data should be convertible to IDictionary");
+            Assert.That(categorySeed.ContainsKey("Id"), Is.True, "Category seed data should contain Id");
+            Assert.That(categorySeed["Id"], Is.EqualTo(1), "Category Id should be 1");
+            // 他のプロパティも検証
+        }
     }
 }
