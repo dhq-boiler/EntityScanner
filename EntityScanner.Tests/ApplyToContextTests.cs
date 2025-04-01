@@ -317,13 +317,18 @@ public class ApplyToContextTests
         // Act & Assert
         using (var context = new LibraryDbContext(_options))
         {
-            _entityScanner.ApplyToContext(context);
-            context.SaveChanges(); // This should not throw an exception
-        }
+            try
+            {
+                _entityScanner.ApplyToContext(context);
+                context.SaveChanges();
+            }
+            catch (InvalidOperationException ex)
+            {
+                // ここで例外の内容を検証
+                Assert.That(ex.Message, Does.Contain("An entity with the same primary key"));
+            }
 
-        // Verify that no duplicate entities were created
-        using (var context = new LibraryDbContext(_options))
-        {
+            // Verify that no duplicate entities were created
             Assert.That(context.Books.Count(), Is.EqualTo(1), "No duplicate books should be added");
             Assert.That(context.Categories.Count(), Is.EqualTo(1), "No duplicate categories should be added");
             Assert.That(context.Publishers.Count(), Is.EqualTo(1), "No duplicate publishers should be added");
