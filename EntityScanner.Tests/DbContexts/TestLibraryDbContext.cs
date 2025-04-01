@@ -18,21 +18,24 @@ namespace EntityScanner.Tests.DbContexts
         {
             base.OnModelCreating(modelBuilder);
 
-            try
+            // シードデータの内容を表示
+            var bookSeedData = _entityScanner.GetSeedData<Book>().ToList();
+            Console.WriteLine($"Book seed data count: {bookSeedData.Count}");
+            foreach (var data in bookSeedData)
             {
-                // EntityScannerのシードデータをModelBuilderに適用
-                _entityScanner.ApplyToModelBuilder(modelBuilder);
+                var dict = data as IDictionary<string, object>;
+                if (dict != null)
+                {
+                    Console.WriteLine("Book seed data properties:");
+                    foreach (var key in dict.Keys)
+                    {
+                        Console.WriteLine($"  {key}: {dict[key]}");
+                    }
+                }
+            }
 
-                // デバッグのために、エンティティの設定を確認
-                var bookEntity = modelBuilder.Entity<Book>();
-                var categoryEntity = modelBuilder.Entity<Category>();
-            }
-            catch (Exception ex)
-            {
-                // 例外の詳細を出力
-                Console.WriteLine($"ApplyToModelBuilder例外: {ex.Message}");
-                throw;
-            }
+            // EntityScannerのシードデータをModelBuilderに適用
+            _entityScanner.ApplyToModelBuilder(modelBuilder);
         }
     }
 }

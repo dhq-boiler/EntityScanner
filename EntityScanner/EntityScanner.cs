@@ -166,34 +166,46 @@ public class EntityScanner
             var entityType = kvp.Key;
             var entities = kvp.Value;
 
-            // 非ジェネリックEntityメソッドを使用してエンティティを取得
+            // エンティティタイプに対応するEntityTypeBuilderを取得
             var entityMethod = typeof(ModelBuilder).GetMethod("Entity", Type.EmptyTypes).MakeGenericMethod(entityType);
             dynamic entityBuilder = entityMethod.Invoke(modelBuilder, null);
 
-            // HasDataメソッドの呼び出し
-            var hasDataMethod = entityBuilder.GetType().GetMethod("HasData", new[] { typeof(object[]) });
-            if (hasDataMethod != null)
+            // シードデータ用の実際のエンティティインスタンスを作成
+            var seedEntities = new List<object>();
+            foreach (var entity in entities)
             {
-                // 各エンティティからナビゲーションプロパティを除外したオブジェクトを作成
-                var seedData = new List<object>();
-                foreach (var entity in entities)
+                // 新しいエンティティインスタンスを作成
+                var newEntity = Activator.CreateInstance(entityType);
+
+                // 基本プロパティのみをコピー
+                foreach (var prop in entityType.GetProperties().Where(p => IsBasicType(p.PropertyType)))
                 {
-                    var nonNavigationProperties = entityType.GetProperties()
-                        .Where(p => IsBasicType(p.PropertyType))
-                        .Select(p => new { Property = p, Value = p.GetValue(entity) })
-                        .Where(x => x.Value != null)
-                        .ToList();
-
-                    // 匿名オブジェクトを動的に生成
-                    var propertyValues = nonNavigationProperties.ToDictionary(
-                        x => x.Property.Name,
-                        x => x.Value);
-
-                    seedData.Add(CreateAnonymousObject(propertyValues));
+                    var value = prop.GetValue(entity);
+                    if (value != null)
+                    {
+                        prop.SetValue(newEntity, value);
+                    }
                 }
 
+                seedEntities.Add(newEntity);
+            }
+
+            if (seedEntities.Any())
+            {
                 // HasDataメソッドを呼び出し
-                hasDataMethod.Invoke(entityBuilder, new object[] { seedData.ToArray() });
+                var hasDataMethod = entityBuilder.GetType().GetMethod("HasData", new[] { typeof(object[]) });
+                if (hasDataMethod != null)
+                {
+                    try
+                    {
+                        hasDataMethod.Invoke(entityBuilder, new object[] { seedEntities.ToArray() });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"HasData呼び出しエラー: {ex.Message}");
+                        throw;
+                    }
+                }
             }
         }
     }
