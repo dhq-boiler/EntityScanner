@@ -264,7 +264,7 @@ namespace EntityScanner.Tests
                 Author = "Jon Smith" // Adding the required Author property
             };
 
-            var author = new Author { Id = 1, Name = "Jon Smith" };
+            var author = new Author { Id = 1, Name = "Jon Smith", Biography = "Software engineer and technical author specializing in .NET technologies." };
             var bookAuthor = new BookAuthor { Id = 1, Book = book, Author = author, Role = "Main Author" };
 
             var bookInventory = new BookInventory
