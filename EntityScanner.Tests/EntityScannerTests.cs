@@ -172,7 +172,7 @@ namespace EntityScanner.Tests
         public void ApplyToContext_ShouldAddEntitiesToDbContext()
         {
             // Arrange
-            var category = new Category { Id = 1, Name = "Fiction" };
+            var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books and novels" };
             var book = new Book
             {
                 Id = 1,
@@ -251,7 +251,7 @@ namespace EntityScanner.Tests
             var library = new Library { Id = 1, Name = "Central Library", Address = "123 Main St" };
             var shelf = new Shelf { Id = 1, ShelfCode = "A1", Location = "First Floor", Library = library };
 
-            var category = new Category { Id = 1, Name = "Computer Science" };
+            var category = new Category { Id = 1, Name = "Computer Science", Description = "Books about programming and computer science" };
             var publisher = new Publisher { Id = 1, Name = "Tech Books Inc." };
             var book = new Book
             {
