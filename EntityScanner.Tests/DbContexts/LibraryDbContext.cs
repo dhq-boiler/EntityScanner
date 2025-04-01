@@ -5,6 +5,11 @@ namespace EntityScanner.Tests.DbContexts;
 
 public class LibraryDbContext : DbContext
 {
+    public LibraryDbContext(DbContextOptions<LibraryDbContext> options)
+        : base(options)
+    {
+    }
+
     // エンティティセット
     public DbSet<Member> Members { get; set; }
     public DbSet<MemberProfile> MemberProfiles { get; set; }
@@ -18,11 +23,6 @@ public class LibraryDbContext : DbContext
     public DbSet<Library> Libraries { get; set; }
     public DbSet<Shelf> Shelves { get; set; }
     public DbSet<BookInventory> BookInventories { get; set; }
-
-    public LibraryDbContext(DbContextOptions<LibraryDbContext> options)
-        : base(options)
-    {
-    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
