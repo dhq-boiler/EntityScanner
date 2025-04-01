@@ -10,11 +10,15 @@ public class EntityScannerTests
     [SetUp]
     public void Setup()
     {
-        // Use in-memory database for testing
+        // SQLiteを使用するための設定
+        var connectionString = $"Data Source=LibraryTestDb_{Guid.NewGuid()}.db";
         _options = new DbContextOptionsBuilder<LibraryDbContext>()
-            .UseInMemoryDatabase($"LibraryTestDb_{Guid.NewGuid()}")
+            .UseSqlite(connectionString)  // InMemoryからSQLiteに変更
             .EnableSensitiveDataLogging()
             .Options;
+
+        // 接続文字列を保存して後でファイルを削除できるようにする
+        _connectionString = connectionString;
 
         // Initialize the EntityScanner
         _entityScanner = new EntityScanner();
@@ -26,8 +30,9 @@ public class EntityScannerTests
         _entityScanner.Clear();
     }
 
-    private DbContextOptions<LibraryDbContext> _options;
-    private EntityScanner _entityScanner;
+    private DbContextOptions<LibraryDbContext> _options = null;
+    private string _connectionString;  // SQLiteファイル名を保持するための変数を追加
+    private EntityScanner _entityScanner = null;
 
     [Test]
     public void RegisterEntity_ShouldAddEntityToCollection()
@@ -250,9 +255,9 @@ public class EntityScannerTests
         var shelf = new Shelf { Id = 1, ShelfCode = "A1", Location = "First Floor", Library = library };
 
         var category = new Category
-            { Id = 1, Name = "Computer Science", Description = "Books about programming and computer science" };
+        { Id = 1, Name = "Computer Science", Description = "Books about programming and computer science" };
         var publisher = new Publisher
-            { Id = 1, Name = "Tech Books Inc.", Address = "456 Tech Boulevard, Silicon Valley, CA" };
+        { Id = 1, Name = "Tech Books Inc.", Address = "456 Tech Boulevard, Silicon Valley, CA" };
         var book = new Book
         {
             Id = 1,
@@ -266,7 +271,8 @@ public class EntityScannerTests
 
         var author = new Author
         {
-            Id = 1, Name = "Jon Smith",
+            Id = 1,
+            Name = "Jon Smith",
             Biography = "Software engineer and technical author specializing in .NET technologies."
         };
         var bookAuthor = new BookAuthor { Id = 1, Book = book, Author = author, Role = "Main Author" };
@@ -290,114 +296,126 @@ public class EntityScannerTests
         category.Books.Add(book);
         publisher.PublishedBooks.Add(book);
 
-        // Act - Register the root entity
-        _entityScanner.RegisterEntity(library);
-
-        // Act - Save to database
-        using (var context = new LibraryDbContext(_options))
-        {
-            _entityScanner.ApplyToContext(context);
-            context.SaveChanges();
-        }
-
-        // Assert - Verify relationships are maintained
-        using (var context = new LibraryDbContext(_options))
-        {
-            // Check entity counts
-            Assert.That(context.Libraries.Count(), Is.EqualTo(1));
-            Assert.That(context.Shelves.Count(), Is.EqualTo(1));
-            Assert.That(context.Books.Count(), Is.EqualTo(1));
-            Assert.That(context.Categories.Count(), Is.EqualTo(1));
-            Assert.That(context.Publishers.Count(), Is.EqualTo(1));
-            Assert.That(context.Authors.Count(), Is.EqualTo(1));
-            Assert.That(context.BookAuthors.Count(), Is.EqualTo(1));
-            Assert.That(context.BookInventories.Count(), Is.EqualTo(1));
-
-            // Verify relationships by loading with Include
-            var loadedLibrary = context.Libraries
-                .Include(l => l.Shelves)
-                .ThenInclude(s => s.BookInventories)
-                .ThenInclude(bi => bi.Book)
-                .ThenInclude(b => b.Category)
-                .FirstOrDefault();
-
-            Assert.That(loadedLibrary, Is.Not.Null);
-            Assert.That(loadedLibrary.Shelves, Has.Count.EqualTo(1));
-            Assert.That(loadedLibrary.Shelves[0].BookInventories, Has.Count.EqualTo(1));
-            Assert.That(loadedLibrary.Shelves[0].BookInventories[0].Book.Title,
-                Is.EqualTo("Entity Framework Core in Action"));
-            Assert.That(loadedLibrary.Shelves[0].BookInventories[0].Book.Category.Name, Is.EqualTo("Computer Science"));
-
-            // Check book-author relationship
-            var loadedBook = context.Books
-                .Include(b => b.Authors)
-                .ThenInclude(ba => ba.Author)
-                .FirstOrDefault();
-
-            Assert.That(loadedBook, Is.Not.Null);
-            Assert.That(loadedBook.Authors, Has.Count.EqualTo(1));
-            Assert.That(loadedBook.Authors[0].Author.Name, Is.EqualTo("Jon Smith"));
-        }
-    }
-
-    [Test]
-    public void ApplyToModelBuilder_ShouldApplySeedDataToDatabase()
-    {
-        // 準備（Arrange）
-        var category = new Category { Id = 1, Name = "小説", Description = "フィクション書籍" };
-
-        // Bookの全ての必須プロパティに値を設定
-        var book = new Book
-        {
-            Id = 1,
-            Title = "テスト本",
-            Author = "テスト著者",
-            ISBN = "1234567890",
-            PublicationYear = 2022,
-            CategoryId = 1, // 外部キーを明示的に設定
-            PublisherId = 1 // Publisher関連の外部キーも設定
-        };
-
-        // カテゴリーとの関連を設定（クラスなので両方向から設定）
-        book.Category = category;
-        category.Books.Add(book);
-
-        // エンティティをスキャナーに登録
-        _entityScanner.RegisterEntity(category); // カテゴリーを先に登録
-        _entityScanner.RegisterEntity(book);
-
-        // テスト用のカスタムDbContextを作成
-        var dbName = $"LibraryTestDb_{Guid.NewGuid()}";
+        // このテスト用の一意のSQLiteファイルを使用
+        var testDbPath = $"Data Source=ComplexScenarioTestDb_{Guid.NewGuid()}.db";
         var options = new DbContextOptionsBuilder<LibraryDbContext>()
-            .UseInMemoryDatabase(dbName)
+            .UseSqlite(testDbPath)
+            .EnableSensitiveDataLogging()
             .Options;
 
-        // OnModelCreatingでシードデータを適用するカスタムコンテキストを作成
-        using (var seedContext = new TestLibraryDbContext(options, _entityScanner))
+        try
         {
-            // データベースの作成を強制
-            seedContext.Database.EnsureCreated();
+            // Act - Register the root entity
+            _entityScanner.RegisterEntity(library);
+
+            // データベースとスキーマを作成
+            using (var context = new LibraryDbContext(options))
+            {
+                // テーブルが存在することを確認
+                context.Database.EnsureCreated();
+            }
+
+            // エンティティをデータベースに保存
+            using (var context = new LibraryDbContext(options))
+            {
+                _entityScanner.ApplyToContext(context);
+
+                // データベースに変更を保存
+                try
+                {
+                    context.SaveChanges();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"データ保存エラー: {ex.Message}");
+                    Console.WriteLine($"内部例外: {ex.InnerException?.Message}");
+                    throw;
+                }
+            }
+
+            // Assert - Verify relationships are maintained
+            using (var context = new LibraryDbContext(options))
+            {
+                // Check entity counts
+                Assert.That(context.Libraries.Count(), Is.EqualTo(1), "図書館が1件存在するべき");
+                Assert.That(context.Shelves.Count(), Is.EqualTo(1), "本棚が1件存在するべき");
+                Assert.That(context.Books.Count(), Is.EqualTo(1), "書籍が1件存在するべき");
+                Assert.That(context.Categories.Count(), Is.EqualTo(1), "カテゴリが1件存在するべき");
+                Assert.That(context.Publishers.Count(), Is.EqualTo(1), "出版社が1件存在するべき");
+                Assert.That(context.Authors.Count(), Is.EqualTo(1), "著者が1件存在するべき");
+                Assert.That(context.BookAuthors.Count(), Is.EqualTo(1), "書籍著者関連が1件存在するべき");
+                Assert.That(context.BookInventories.Count(), Is.EqualTo(1), "書籍在庫が1件存在するべき");
+
+                // Verify relationships by loading with Include
+                var loadedLibrary = context.Libraries
+                    .Include(l => l.Shelves)
+                    .ThenInclude(s => s.BookInventories)
+                    .ThenInclude(bi => bi.Book)
+                    .ThenInclude(b => b.Category)
+                    .FirstOrDefault();
+
+                Assert.That(loadedLibrary, Is.Not.Null, "図書館が取得できるべき");
+
+                if (loadedLibrary != null)
+                {
+                    Assert.That(loadedLibrary.Shelves, Has.Count.EqualTo(1), "図書館には1件の本棚があるべき");
+
+                    if (loadedLibrary.Shelves.Count > 0)
+                    {
+                        Assert.That(loadedLibrary.Shelves[0].BookInventories, Has.Count.EqualTo(1), "本棚には1件の書籍在庫があるべき");
+
+                        if (loadedLibrary.Shelves[0].BookInventories.Count > 0)
+                        {
+                            Assert.That(loadedLibrary.Shelves[0].BookInventories[0].Book.Title,
+                                Is.EqualTo("Entity Framework Core in Action"), "書籍タイトルが正しいべき");
+                            Assert.That(loadedLibrary.Shelves[0].BookInventories[0].Book.Category.Name,
+                                Is.EqualTo("Computer Science"), "書籍カテゴリが正しいべき");
+                        }
+                    }
+                }
+
+                // Check book-author relationship
+                var loadedBook = context.Books
+                    .Include(b => b.Authors)
+                    .ThenInclude(ba => ba.Author)
+                    .FirstOrDefault();
+
+                Assert.That(loadedBook, Is.Not.Null, "書籍が取得できるべき");
+
+                if (loadedBook != null)
+                {
+                    Assert.That(loadedBook.Authors, Has.Count.EqualTo(1), "書籍には1人の著者が関連付けられているべき");
+
+                    if (loadedBook.Authors.Count > 0)
+                    {
+                        Assert.That(loadedBook.Authors[0].Author.Name, Is.EqualTo("Jon Smith"), "著者名が正しいべき");
+                    }
+                }
+            }
         }
-
-        // 検証
-        using (var context = new LibraryDbContext(options))
+        finally
         {
-            var books = context.Books.ToList();
-            Assert.That(books, Has.Count.EqualTo(1));
-            Assert.That(books[0].Id, Is.EqualTo(1));
-            Assert.That(books[0].Title, Is.EqualTo("テスト本"));
-
-            var categories = context.Categories.ToList();
-            Assert.That(categories, Has.Count.EqualTo(1));
-            Assert.That(categories[0].Id, Is.EqualTo(1));
-            Assert.That(categories[0].Name, Is.EqualTo("小説"));
+            // テスト後にSQLiteファイルを削除
+            var dbFileName = testDbPath.Replace("Data Source=", "");
+            if (File.Exists(dbFileName))
+            {
+                try
+                {
+                    File.Delete(dbFileName);
+                }
+                catch
+                {
+                    // ファイル削除に失敗しても無視
+                }
+            }
         }
     }
 
+    // このテストは、GetSeedDataメソッドの動作を検証します（ApplyToModelBuilderは使用しません）
     [Test]
-    public void ApplyToModelBuilder_ShouldGenerateCorrectSeedData()
+    public void GetSeedData_ShouldReturnCorrectData()
     {
-        // 準備（Arrange）
+        // 準備
         var category = new Category { Id = 1, Name = "小説", Description = "フィクション書籍" };
         var book = new Book
         {
@@ -406,6 +424,7 @@ public class EntityScannerTests
             Author = "テスト著者",
             ISBN = "1234567890",
             PublicationYear = 2022,
+            Category = category,
             CategoryId = 1,
             PublisherId = 1
         };
@@ -414,7 +433,7 @@ public class EntityScannerTests
         _entityScanner.RegisterEntity(category);
         _entityScanner.RegisterEntity(book);
 
-        // GetSeedDataメソッドを使用してシードデータを取得し、内容を検証
+        // GetSeedDataメソッドを使用してシードデータを取得
         var bookSeedData = _entityScanner.GetSeedData<Book>().ToList();
         var categorySeedData = _entityScanner.GetSeedData<Category>().ToList();
 
@@ -429,13 +448,15 @@ public class EntityScannerTests
         Assert.That(bookSeed["Id"], Is.EqualTo(1), "Book Id should be 1");
         Assert.That(bookSeed.ContainsKey("Title"), Is.True, "Book seed data should contain Title");
         Assert.That(bookSeed["Title"], Is.EqualTo("テスト本"), "Book Title should be テスト本");
-        // 必要に応じて他のプロパティも検証
+        Assert.That(bookSeed.ContainsKey("CategoryId"), Is.True, "Book seed data should contain CategoryId");
+        Assert.That(bookSeed["CategoryId"], Is.EqualTo(1), "Book CategoryId should be 1");
 
         // カテゴリのシードデータも同様に検証
         var categorySeed = categorySeedData[0] as IDictionary<string, object>;
         Assert.That(categorySeed, Is.Not.Null, "Category seed data should be convertible to IDictionary");
         Assert.That(categorySeed.ContainsKey("Id"), Is.True, "Category seed data should contain Id");
         Assert.That(categorySeed["Id"], Is.EqualTo(1), "Category Id should be 1");
-        // 他のプロパティも検証
+        Assert.That(categorySeed.ContainsKey("Name"), Is.True, "Category seed data should contain Name");
+        Assert.That(categorySeed["Name"], Is.EqualTo("小説"), "Category Name should be 小説");
     }
 }

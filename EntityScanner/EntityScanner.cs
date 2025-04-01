@@ -151,66 +151,6 @@ public class EntityScanner
     }
 
     /// <summary>
-    ///     モデルビルダーにシードデータを適用します。
-    /// </summary>
-    /// <param name="modelBuilder">ModelBuilderインスタンス</param>
-    public void ApplyToModelBuilder(ModelBuilder modelBuilder)
-    {
-        if (modelBuilder == null)
-        {
-            throw new ArgumentNullException(nameof(modelBuilder));
-        }
-
-        foreach (var kvp in _entities)
-        {
-            var entityType = kvp.Key;
-            var entities = kvp.Value;
-
-            // エンティティタイプに対応するEntityTypeBuilderを取得
-            var entityMethod = typeof(ModelBuilder).GetMethod("Entity", Type.EmptyTypes).MakeGenericMethod(entityType);
-            dynamic entityBuilder = entityMethod.Invoke(modelBuilder, null);
-
-            // シードデータ用の実際のエンティティインスタンスを作成
-            var seedEntities = new List<object>();
-            foreach (var entity in entities)
-            {
-                // 新しいエンティティインスタンスを作成
-                var newEntity = Activator.CreateInstance(entityType);
-
-                // 基本プロパティのみをコピー
-                foreach (var prop in entityType.GetProperties().Where(p => IsBasicType(p.PropertyType)))
-                {
-                    var value = prop.GetValue(entity);
-                    if (value != null)
-                    {
-                        prop.SetValue(newEntity, value);
-                    }
-                }
-
-                seedEntities.Add(newEntity);
-            }
-
-            if (seedEntities.Any())
-            {
-                // HasDataメソッドを呼び出し
-                var hasDataMethod = entityBuilder.GetType().GetMethod("HasData", new[] { typeof(object[]) });
-                if (hasDataMethod != null)
-                {
-                    try
-                    {
-                        hasDataMethod.Invoke(entityBuilder, new object[] { seedEntities.ToArray() });
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"HasData呼び出しエラー: {ex.Message}");
-                        throw;
-                    }
-                }
-            }
-        }
-    }
-
-    /// <summary>
     ///     ナビゲーションプロパティを再帰的に走査し、関連する外部キープロパティを自動的に設定します。
     /// </summary>
     /// <param name="entity">走査するエンティティ</param>
