@@ -20,6 +20,13 @@ public class EntityScanner
     private readonly Dictionary<Type, IList<object>> _entities = new();
     private readonly HashSet<object> _processedEntities = new();
 
+    public DuplicateEntityBehavior DuplicateBehavior { get; set; } = DuplicateEntityBehavior.ThrowException;
+
+    public EntityScanner(DuplicateEntityBehavior behavior = DuplicateEntityBehavior.ThrowException)
+    {
+        DuplicateBehavior = behavior;
+    }
+
     /// <summary>
     ///     エンティティを登録します。ナビゲーションプロパティも再帰的に処理されます。
     /// </summary>
@@ -165,7 +172,19 @@ public class EntityScanner
 
                         if (existingTrackedEntity != null)
                         {
-                            throw new InvalidOperationException($"An entity with key {pkValue} is already being tracked");
+                            switch (DuplicateBehavior)
+                            {
+                                case DuplicateEntityBehavior.ThrowException:
+                                    throw new InvalidOperationException($"An entity with key {pkValue} is already being tracked");
+
+                                case DuplicateEntityBehavior.Ignore:
+                                    continue; // 既存のエンティティを無視して次へ
+
+                                case DuplicateEntityBehavior.Update:
+                                case DuplicateEntityBehavior.AddAlways:
+                                    // これらのモードは後で処理
+                                    break;
+                            }
                         }
 
                         // エンティティを追跡対象に追加
@@ -181,28 +200,47 @@ public class EntityScanner
                         }
                         else
                         {
-                            // エンティティが存在する場合、プロパティを比較
-                            var properties = entityType.GetProperties()
-                                .Where(p => p.CanWrite && !IsNavigationProperty(p));
-
-                            bool hasChanges = false;
-                            foreach (var prop in properties)
+                            // エンティティが存在する場合の処理
+                            switch (DuplicateBehavior)
                             {
-                                var newValue = prop.GetValue(entity);
-                                var existingValue = prop.GetValue(existingEntity);
+                                case DuplicateEntityBehavior.ThrowException:
+                                    // プロパティを比較
+                                    var properties = entityType.GetProperties()
+                                        .Where(p => p.CanWrite && !IsNavigationProperty(p));
 
-                                if (!Equals(newValue, existingValue))
-                                {
-                                    hasChanges = true;
+                                    bool hasChanges = false;
+                                    foreach (var prop in properties)
+                                    {
+                                        var newValue = prop.GetValue(entity);
+                                        var existingValue = prop.GetValue(existingEntity);
+                                        if (!Equals(newValue, existingValue))
+                                        {
+                                            hasChanges = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (hasChanges)
+                                    {
+                                        // 異なるプロパティがある場合は例外をスロー
+                                        throw new InvalidOperationException(
+                                            $"An entity with the same primary key {pkValue} but different properties already exists.");
+                                    }
                                     break;
-                                }
-                            }
 
-                            if (hasChanges)
-                            {
-                                // 異なるプロパティがある場合は例外をスロー
-                                throw new InvalidOperationException(
-                                    $"An entity with the same primary key {pkValue} but different properties already exists.");
+                                case DuplicateEntityBehavior.Update:
+                                    // 既存のエンティティを新しいエンティティの値で更新
+                                    UpdateEntityProperties(existingEntity, entity);
+                                    break;
+
+                                case DuplicateEntityBehavior.Ignore:
+                                    // すでに存在するため何もしない
+                                    break;
+
+                                case DuplicateEntityBehavior.AddAlways:
+                                    // 新しいエンティティを常に追加（主キーを変更）
+                                    AddEntityAlways(dbSet, entity, pkProperty);
+                                    break;
                             }
                         }
                     }
@@ -214,6 +252,66 @@ public class EntityScanner
                 }
             }
         }
+    }
+
+    // エンティティのプロパティを更新するヘルパーメソッド
+    private void UpdateEntityProperties(object existingEntity, object newEntity)
+    {
+        var properties = existingEntity.GetType().GetProperties()
+            .Where(p => p.CanWrite && !IsNavigationProperty(p));
+
+        foreach (var prop in properties)
+        {
+            var newValue = prop.GetValue(newEntity);
+            prop.SetValue(existingEntity, newValue);
+        }
+    }
+
+    // 新しいエンティティを常に追加するためのヘルパーメソッド
+    private void AddEntityAlways(dynamic dbSet, object entity, PropertyInfo pkProperty)
+    {
+        // 重複を避けるため、主キーを一意にする戦略
+        // オプション1: 一時的な一意のキーを生成
+        var originalPkValue = pkProperty.GetValue(entity);
+        pkProperty.SetValue(entity, GenerateUniqueKey(dbSet, originalPkValue));
+
+        dbSet.Add((dynamic)entity);
+    }
+
+    // 一意のキーを生成するヘルパーメソッド
+    private object GenerateUniqueKey(dynamic dbSet, object originalKey)
+    {
+        // データベース内の最大キー値を取得し、新しいキーを生成
+        // 注意: これは簡単な実装で、実際のユースケースでは more robust な実装が必要
+        int attempts = 0;
+        object newKey = originalKey;
+
+        while (dbSet.Find(newKey) != null && attempts < 100)
+        {
+            // キーを増分
+            if (newKey is int intKey)
+            {
+                newKey = intKey + 1;
+            }
+            else if (newKey is long longKey)
+            {
+                newKey = longKey + 1;
+            }
+            else if (newKey is Guid)
+            {
+                newKey = Guid.NewGuid();
+            }
+            // 他の型の場合は適切な一意キー生成ロジックを追加
+
+            attempts++;
+        }
+
+        if (attempts >= 100)
+        {
+            throw new InvalidOperationException("Could not generate a unique key");
+        }
+
+        return newKey;
     }
 
     // ナビゲーションプロパティを判定するヘルパーメソッド
