@@ -260,7 +260,8 @@ namespace EntityScanner.Tests
                 ISBN = "9781617294563",
                 PublicationYear = 2018,
                 Category = category,
-                Publisher = publisher
+                Publisher = publisher,
+                Author = "Jon Smith" // Adding the required Author property
             };
 
             var author = new Author { Id = 1, Name = "Jon Smith" };
