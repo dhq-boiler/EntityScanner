@@ -164,8 +164,29 @@ public class EntityScanner
                         }
                         else
                         {
-                            // エンティティが存在する場合は更新
-                            context.Entry(existingEntity).CurrentValues.SetValues(entity);
+                            // エンティティが存在する場合、プロパティを比較
+                            var properties = entityType.GetProperties()
+                                .Where(p => p.CanWrite && !IsNavigationProperty(p));
+
+                            bool hasChanges = false;
+                            foreach (var prop in properties)
+                            {
+                                var newValue = prop.GetValue(entity);
+                                var existingValue = prop.GetValue(existingEntity);
+
+                                if (!Equals(newValue, existingValue))
+                                {
+                                    hasChanges = true;
+                                    break;
+                                }
+                            }
+
+                            if (hasChanges)
+                            {
+                                // 異なるプロパティがある場合は例外をスロー
+                                throw new InvalidOperationException(
+                                    $"An entity with the same primary key {pkValue} but different properties already exists.");
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -176,6 +197,20 @@ public class EntityScanner
                 }
             }
         }
+    }
+
+    // ナビゲーションプロパティを判定するヘルパーメソッド
+    private bool IsNavigationProperty(PropertyInfo property)
+    {
+        if (property == null)
+        {
+            return false;
+        }
+
+        // 基本型でなく、コレクションでもない場合は参照ナビゲーションプロパティと見なす
+        return !IsBasicType(property.PropertyType) &&
+               (!typeof(IEnumerable).IsAssignableFrom(property.PropertyType) ||
+                property.PropertyType == typeof(string));
     }
 
     /// <summary>

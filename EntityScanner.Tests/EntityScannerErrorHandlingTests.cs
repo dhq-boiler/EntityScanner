@@ -90,7 +90,7 @@ public class EntityScannerErrorHandlingTests
     }
 
     [Test]
-    public void ApplyToContext_WithDifferentEntitiesSameId_ShouldThrowDbUpdateException()
+    public void ApplyToContext_WithDifferentEntitiesSameId_ShouldThrowException()
     {
         // Arrange - まず1つ目のエンティティを保存する
         var category1 = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
@@ -113,16 +113,14 @@ public class EntityScannerErrorHandlingTests
         };
         _entityScanner.RegisterEntity(category2);
 
-        // Act & Assert - 別のコンテキストで追加してSaveChanges時に例外
+        // Act & Assert - 別のコンテキストで追加して例外が発生することを確認
         using (var context = new LibraryDbContext(_options))
         {
-            _entityScanner.ApplyToContext(context);
-
-            // SaveChanges時に主キー制約違反の例外が発生する
-            var ex = Assert.Throws<DbUpdateException>(() => context.SaveChanges());
-            Assert.That(ex.InnerException.Message, Does.Contain("UNIQUE constraint failed") |
-                                                  Does.Contain("duplicate key value") |
-                                                  Does.Contain("violation of PRIMARY KEY constraint"));
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                _entityScanner.ApplyToContext(context);
+                context.SaveChanges();
+            }, "Should throw an exception when adding an entity with same ID but different properties");
         }
     }
 
