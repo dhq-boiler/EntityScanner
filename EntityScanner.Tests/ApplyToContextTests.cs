@@ -272,6 +272,8 @@ public class ApplyToContextTests
     [Test]
     public void ApplyToContext_WithExistingEntities_ShouldNotDuplicateThem()
     {
+        _entityScanner.DuplicateBehavior = DuplicateEntityBehavior.Update;
+
         // Arrange - First add entities to database
         var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
         var publisher = new Publisher { Id = 1, Name = "Test Publisher", Address = "Test Address" };
@@ -338,6 +340,8 @@ public class ApplyToContextTests
     [Test]
     public void ApplyToContext_WithUpdatedEntities_ShouldUpdateExistingEntities()
     {
+        _entityScanner.DuplicateBehavior = DuplicateEntityBehavior.Update;
+
         // Arrange - First add entities to database
         var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
         var publisher = new Publisher { Id = 1, Name = "Test Publisher", Address = "Test Address" };
@@ -364,27 +368,27 @@ public class ApplyToContextTests
         }
 
         // Now update entities
-        var updatedCategory = new Category { Id = 1, Name = "Updated Fiction", Description = "Updated fiction books" };
-        var updatedPublisher = new Publisher { Id = 1, Name = "Updated Publisher", Address = "Test Address" }; // Keep original address
-        var updatedBook = new Book
-        {
-            Id = 1,
-            Title = "Updated Test Book",
-            Author = "Updated Author",
-            ISBN = "0987654321", // Changed ISBN
-            PublicationYear = 2023, // Changed year
-            Category = updatedCategory,
-            CategoryId = 1,
-            Publisher = updatedPublisher,
-            PublisherId = 1
-        };
-
-        _entityScanner.RegisterEntity(updatedBook);
-
-        // Act
+        // 重要: 既存のエンティティを取得してから更新
         using (var context = new LibraryDbContext(_options))
         {
-            _entityScanner.ApplyToContext(context);
+            var existingBook = context.Books
+                .Include(b => b.Category)
+                .Include(b => b.Publisher)
+                .First(b => b.Id == 1);
+
+            // カテゴリを更新
+            existingBook.Category.Name = "Updated Fiction";
+            existingBook.Category.Description = "Updated fiction books";
+
+            // 出版社を更新
+            existingBook.Publisher.Name = "Updated Publisher";
+
+            // 本の情報を更新
+            existingBook.Title = "Updated Test Book";
+            existingBook.Author = "Updated Author";
+            existingBook.ISBN = "0987654321";
+            existingBook.PublicationYear = 2023;
+
             context.SaveChanges();
         }
 
