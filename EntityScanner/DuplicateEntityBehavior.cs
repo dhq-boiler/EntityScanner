@@ -4,6 +4,9 @@ using System.Text;
 
 namespace EntityScanner
 {
+    /// <summary>
+    /// 同じとみなされる（即ち主キーが同じ）エンティティが既に存在する場合の振る舞いを表します。
+    /// </summary>
     public enum DuplicateEntityBehavior
     {
         /// <summary>
