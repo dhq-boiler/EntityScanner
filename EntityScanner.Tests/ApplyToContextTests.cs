@@ -227,8 +227,9 @@ public class ApplyToContextTests
     [Test]
     public void ApplyToContext_WithNewEntities_ShouldAddThemToDatabase()
     {
-        // Arrange
+        // Arrange - カテゴリと出版社も一緒に登録
         var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var publisher = new Publisher { Id = 1, Name = "Test Publisher", Address = "Publisher Address" };
         var book = new Book
         {
             Id = 1,
@@ -238,9 +239,13 @@ public class ApplyToContextTests
             PublicationYear = 2022,
             Category = category,
             CategoryId = 1,
+            Publisher = publisher,
             PublisherId = 1
         };
 
+        // カテゴリ、出版社、本の順に登録
+        _entityScanner.RegisterEntity(category);
+        _entityScanner.RegisterEntity(publisher);
         _entityScanner.RegisterEntity(book);
 
         // Act
@@ -255,10 +260,12 @@ public class ApplyToContextTests
         {
             Assert.That(context.Books.Count(), Is.EqualTo(1));
             Assert.That(context.Categories.Count(), Is.EqualTo(1));
+            Assert.That(context.Publishers.Count(), Is.EqualTo(1));
 
-            var savedBook = context.Books.Include(b => b.Category).First();
+            var savedBook = context.Books.Include(b => b.Category).Include(b => b.Publisher).First();
             Assert.That(savedBook.Title, Is.EqualTo("Test Book"));
             Assert.That(savedBook.Category.Name, Is.EqualTo("Fiction"));
+            Assert.That(savedBook.Publisher.Name, Is.EqualTo("Test Publisher"));
         }
     }
 
