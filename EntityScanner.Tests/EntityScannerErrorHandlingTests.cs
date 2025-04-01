@@ -69,6 +69,7 @@ public class EntityScannerErrorHandlingTests
         Assert.That(ex.ParamName, Is.EqualTo("context"), "Parameter name should be 'context'");
     }
 
+
     [Test]
     public void ApplyToContext_WithDuplicateIds_ShouldThrowInvalidOperationException()
     {
@@ -85,7 +86,7 @@ public class EntityScannerErrorHandlingTests
             var ex = Assert.Throws<InvalidOperationException>(() => _entityScanner.ApplyToContext(context));
 
             // エラーメッセージをチェック
-            Assert.That(ex.Message, Does.Contain("already being tracked"));
+            Assert.That(ex.Message, Does.Contain("is already being tracked"));
         }
     }
 

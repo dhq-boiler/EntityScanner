@@ -124,6 +124,9 @@ public class EntityScanner
             throw new ArgumentNullException(nameof(context));
         }
 
+        // 追跡されているエンティティを記録するセット
+        var trackedEntities = new HashSet<object>();
+
         // エンティティの型ごとに処理
         foreach (var kvp in _entities)
         {
@@ -153,6 +156,20 @@ public class EntityScanner
                         }
 
                         var pkValue = pkProperty.GetValue(entity);
+
+                        // 同じプライマリキーを持つエンティティがすでに追跡されているかチェック
+                        var existingTrackedEntity = trackedEntities
+                            .FirstOrDefault(e =>
+                                e.GetType() == entityType &&
+                                FindPrimaryKeyProperty(e)?.GetValue(e)?.Equals(pkValue) == true);
+
+                        if (existingTrackedEntity != null)
+                        {
+                            throw new InvalidOperationException($"An entity with key {pkValue} is already being tracked");
+                        }
+
+                        // エンティティを追跡対象に追加
+                        trackedEntities.Add(entity);
 
                         // 既存のエンティティを検索
                         var existingEntity = dbSet.Find(pkValue);
