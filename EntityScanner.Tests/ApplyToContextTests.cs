@@ -225,33 +225,25 @@ public class ApplyToContextTests
     }
 
     [Test]
-    public void ApplyToContext_WithUpdatedEntities_ShouldUpdateExistingEntities()
+    public void ApplyToContext_WithNewEntities_ShouldAddThemToDatabase()
     {
-        // Arrange - 最初にエンティティを作成
-        var category = new Category { Id = 1, Name = "Technology", Description = "Tech books" };
-
-        _entityScanner.RegisterEntity(category);
-
-        using (var context = new LibraryDbContext(_options))
+        // Arrange
+        var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var book = new Book
         {
-            _entityScanner.ApplyToContext(context);
-            context.SaveChanges();
-        }
-
-        // EntityScannerをクリア
-        _entityScanner.Clear();
-
-        // 同じIDで更新されたエンティティを作成
-        var updatedCategory = new Category
-        {
-            Id = 1, // 同じID
-            Name = "Updated Technology", // 更新された名前
-            Description = "Updated description" // 更新された説明
+            Id = 1,
+            Title = "Test Book",
+            Author = "Test Author",
+            ISBN = "1234567890",
+            PublicationYear = 2022,
+            Category = category,
+            CategoryId = 1,
+            PublisherId = 1
         };
 
-        _entityScanner.RegisterEntity(updatedCategory);
+        _entityScanner.RegisterEntity(book);
 
-        // Act - 更新されたエンティティをコンテキストに適用
+        // Act
         using (var context = new LibraryDbContext(_options))
         {
             _entityScanner.ApplyToContext(context);
@@ -261,10 +253,127 @@ public class ApplyToContextTests
         // Assert
         using (var context = new LibraryDbContext(_options))
         {
-            var categories = context.Categories.ToList();
-            Assert.That(categories.Count, Is.EqualTo(1), "Should still have one category");
-            Assert.That(categories[0].Name, Is.EqualTo("Updated Technology"), "Name should be updated");
-            Assert.That(categories[0].Description, Is.EqualTo("Updated description"), "Description should be updated");
+            Assert.That(context.Books.Count(), Is.EqualTo(1));
+            Assert.That(context.Categories.Count(), Is.EqualTo(1));
+
+            var savedBook = context.Books.Include(b => b.Category).First();
+            Assert.That(savedBook.Title, Is.EqualTo("Test Book"));
+            Assert.That(savedBook.Category.Name, Is.EqualTo("Fiction"));
+        }
+    }
+
+    [Test]
+    public void ApplyToContext_WithExistingEntities_ShouldNotDuplicateThem()
+    {
+        // Arrange - First add entities to database
+        var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var book = new Book
+        {
+            Id = 1,
+            Title = "Test Book",
+            Author = "Test Author",
+            ISBN = "1234567890",
+            PublicationYear = 2022,
+            Category = category,
+            CategoryId = 1,
+            PublisherId = 1
+        };
+
+        using (var context = new LibraryDbContext(_options))
+        {
+            context.Categories.Add(category);
+            context.Books.Add(book);
+            context.SaveChanges();
+        }
+
+        // Now try to apply the same entities again
+        var sameCategory = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var sameBook = new Book
+        {
+            Id = 1,
+            Title = "Test Book",
+            Author = "Test Author",
+            ISBN = "1234567890",
+            PublicationYear = 2022,
+            Category = sameCategory,
+            CategoryId = 1,
+            PublisherId = 1
+        };
+
+        _entityScanner.RegisterEntity(sameBook);
+
+        // Act
+        using (var context = new LibraryDbContext(_options))
+        {
+            _entityScanner.ApplyToContext(context);
+            context.SaveChanges(); // This should not throw an exception
+        }
+
+        // Assert
+        using (var context = new LibraryDbContext(_options))
+        {
+            Assert.That(context.Books.Count(), Is.EqualTo(1), "No duplicate books should be added");
+            Assert.That(context.Categories.Count(), Is.EqualTo(1), "No duplicate categories should be added");
+        }
+    }
+
+    [Test]
+    public void ApplyToContext_WithUpdatedEntities_ShouldUpdateExistingEntities()
+    {
+        // Arrange - First add entities to database
+        var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var book = new Book
+        {
+            Id = 1,
+            Title = "Test Book",
+            Author = "Test Author",
+            ISBN = "1234567890",
+            PublicationYear = 2022,
+            Category = category,
+            CategoryId = 1,
+            PublisherId = 1
+        };
+
+        using (var context = new LibraryDbContext(_options))
+        {
+            context.Categories.Add(category);
+            context.Books.Add(book);
+            context.SaveChanges();
+        }
+
+        // Now update entities
+        var updatedCategory = new Category { Id = 1, Name = "Updated Fiction", Description = "Updated fiction books" };
+        var updatedBook = new Book
+        {
+            Id = 1,
+            Title = "Updated Test Book",
+            Author = "Updated Author",
+            ISBN = "0987654321", // Changed ISBN
+            PublicationYear = 2023, // Changed year
+            Category = updatedCategory,
+            CategoryId = 1,
+            PublisherId = 1
+        };
+
+        _entityScanner.RegisterEntity(updatedBook);
+
+        // Act
+        using (var context = new LibraryDbContext(_options))
+        {
+            _entityScanner.ApplyToContext(context);
+            context.SaveChanges();
+        }
+
+        // Assert
+        using (var context = new LibraryDbContext(_options))
+        {
+            var updatedSavedBook = context.Books.Include(b => b.Category).First();
+            Assert.That(updatedSavedBook.Title, Is.EqualTo("Updated Test Book"));
+            Assert.That(updatedSavedBook.Author, Is.EqualTo("Updated Author"));
+            Assert.That(updatedSavedBook.ISBN, Is.EqualTo("0987654321"));
+            Assert.That(updatedSavedBook.PublicationYear, Is.EqualTo(2023));
+            Assert.That(updatedSavedBook.Category.Name, Is.EqualTo("Updated Fiction"));
+            Assert.That(updatedSavedBook.Category.Description, Is.EqualTo("Updated fiction books"));
         }
     }
 
