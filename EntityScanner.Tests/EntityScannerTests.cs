@@ -20,6 +20,7 @@ namespace EntityScanner.Tests
             // Use in-memory database for testing
             _options = new DbContextOptionsBuilder<LibraryDbContext>()
                 .UseInMemoryDatabase(databaseName: $"LibraryTestDb_{Guid.NewGuid()}")
+                .EnableSensitiveDataLogging()
                 .Options;
 
             // Initialize the EntityScanner
@@ -252,7 +253,7 @@ namespace EntityScanner.Tests
             var shelf = new Shelf { Id = 1, ShelfCode = "A1", Location = "First Floor", Library = library };
 
             var category = new Category { Id = 1, Name = "Computer Science", Description = "Books about programming and computer science" };
-            var publisher = new Publisher { Id = 1, Name = "Tech Books Inc." };
+            var publisher = new Publisher { Id = 1, Name = "Tech Books Inc.", Address = "456 Tech Boulevard, Silicon Valley, CA" };
             var book = new Book
             {
                 Id = 1,
