@@ -141,10 +141,38 @@ public class EntityScanner
                 // DbSetを取得
                 dynamic dbSet = dbSetProperty.GetValue(context);
 
-                // エンティティをDbSetに追加
                 foreach (var entity in entities)
                 {
-                    dbSet.Add((dynamic)entity);
+                    try
+                    {
+                        // プライマリキーを取得
+                        var pkProperty = FindPrimaryKeyProperty(entity);
+                        if (pkProperty == null)
+                        {
+                            throw new InvalidOperationException($"Could not find primary key for type {entityType.Name}");
+                        }
+
+                        var pkValue = pkProperty.GetValue(entity);
+
+                        // 既存のエンティティを検索
+                        var existingEntity = dbSet.Find(pkValue);
+
+                        if (existingEntity == null)
+                        {
+                            // エンティティが存在しない場合は追加
+                            dbSet.Add((dynamic)entity);
+                        }
+                        else
+                        {
+                            // エンティティが存在する場合は更新
+                            context.Entry(existingEntity).CurrentValues.SetValues(entity);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException(
+                            $"Error processing entity of type {entityType.Name}: {ex.Message}", ex);
+                    }
                 }
             }
         }

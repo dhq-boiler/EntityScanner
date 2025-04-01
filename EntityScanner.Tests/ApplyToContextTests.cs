@@ -267,6 +267,7 @@ public class ApplyToContextTests
     {
         // Arrange - First add entities to database
         var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var publisher = new Publisher { Id = 1, Name = "Test Publisher", Address = "Test Address" };
         var book = new Book
         {
             Id = 1,
@@ -276,18 +277,21 @@ public class ApplyToContextTests
             PublicationYear = 2022,
             Category = category,
             CategoryId = 1,
+            Publisher = publisher,
             PublisherId = 1
         };
 
         using (var context = new LibraryDbContext(_options))
         {
             context.Categories.Add(category);
+            context.Publishers.Add(publisher);
             context.Books.Add(book);
             context.SaveChanges();
         }
 
         // Now try to apply the same entities again
         var sameCategory = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var samePublisher = new Publisher { Id = 1, Name = "Test Publisher", Address = "Test Address" };
         var sameBook = new Book
         {
             Id = 1,
@@ -297,23 +301,25 @@ public class ApplyToContextTests
             PublicationYear = 2022,
             Category = sameCategory,
             CategoryId = 1,
+            Publisher = samePublisher,
             PublisherId = 1
         };
 
         _entityScanner.RegisterEntity(sameBook);
 
-        // Act
+        // Act & Assert
         using (var context = new LibraryDbContext(_options))
         {
             _entityScanner.ApplyToContext(context);
             context.SaveChanges(); // This should not throw an exception
         }
 
-        // Assert
+        // Verify that no duplicate entities were created
         using (var context = new LibraryDbContext(_options))
         {
             Assert.That(context.Books.Count(), Is.EqualTo(1), "No duplicate books should be added");
             Assert.That(context.Categories.Count(), Is.EqualTo(1), "No duplicate categories should be added");
+            Assert.That(context.Publishers.Count(), Is.EqualTo(1), "No duplicate publishers should be added");
         }
     }
 
