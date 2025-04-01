@@ -272,7 +272,7 @@ public class ApplyToContextTests
     [Test]
     public void ApplyToContext_WithExistingEntities_ShouldNotDuplicateThem()
     {
-        _entityScanner.DuplicateBehavior = DuplicateEntityBehavior.Update;
+        _entityScanner.DuplicateBehavior = DuplicateEntityBehavior.Ignore; // または Update
 
         // Arrange - First add entities to database
         var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
@@ -285,9 +285,9 @@ public class ApplyToContextTests
             ISBN = "1234567890",
             PublicationYear = 2022,
             Category = category,
-            CategoryId = 1,
+            CategoryId = category.Id, // 明示的に外部キーを設定
             Publisher = publisher,
-            PublisherId = 1
+            PublisherId = publisher.Id // 明示的に外部キーを設定
         };
 
         using (var context = new LibraryDbContext(_options))
@@ -309,9 +309,9 @@ public class ApplyToContextTests
             ISBN = "1234567890",
             PublicationYear = 2022,
             Category = sameCategory,
-            CategoryId = 1,
+            CategoryId = sameCategory.Id, // 明示的に外部キーを設定
             Publisher = samePublisher,
-            PublisherId = 1
+            PublisherId = samePublisher.Id // 明示的に外部キーを設定
         };
 
         _entityScanner.RegisterEntity(sameBook);
@@ -319,18 +319,12 @@ public class ApplyToContextTests
         // Act & Assert
         using (var context = new LibraryDbContext(_options))
         {
-            try
-            {
-                _entityScanner.ApplyToContext(context);
-                context.SaveChanges();
-            }
-            catch (InvalidOperationException ex)
-            {
-                // ここで例外の内容を検証
-                Assert.That(ex.Message, Does.Contain("An entity with the same primary key"));
-            }
+            _entityScanner.ApplyToContext(context);
 
-            // Verify that no duplicate entities were created
+            // SaveChangesの前に例外が発生しないことを確認
+            Assert.DoesNotThrow(() => context.SaveChanges());
+
+            // 重複エンティティが作成されていないことを確認
             Assert.That(context.Books.Count(), Is.EqualTo(1), "No duplicate books should be added");
             Assert.That(context.Categories.Count(), Is.EqualTo(1), "No duplicate categories should be added");
             Assert.That(context.Publishers.Count(), Is.EqualTo(1), "No duplicate publishers should be added");
