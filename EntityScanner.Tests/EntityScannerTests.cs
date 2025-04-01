@@ -175,6 +175,7 @@ public class EntityScannerTests
     {
         // Arrange
         var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books and novels" };
+        var publisher = new Publisher { Id = 1, Name = "Test Publisher", Address = "Test Address" };
         var book = new Book
         {
             Id = 1,
@@ -183,7 +184,7 @@ public class EntityScannerTests
             ISBN = "1234567890",
             PublicationYear = 2022,
             Category = category,
-            PublisherId = 1
+            Publisher = publisher  // Set the Publisher navigation property
         };
 
         _entityScanner.RegisterEntity(book);
@@ -191,6 +192,9 @@ public class EntityScannerTests
         // Act
         using (var context = new LibraryDbContext(_options))
         {
+            // Ensure database and schema are created first
+            context.Database.EnsureCreated();
+
             _entityScanner.ApplyToContext(context);
             context.SaveChanges();
         }
@@ -200,11 +204,18 @@ public class EntityScannerTests
         {
             Assert.That(context.Books.Count(), Is.EqualTo(1), "Book should be saved to database");
             Assert.That(context.Categories.Count(), Is.EqualTo(1), "Category should be saved to database");
+            Assert.That(context.Publishers.Count(), Is.EqualTo(1), "Publisher should be saved to database");
 
-            var savedBook = context.Books.Include(b => b.Category).FirstOrDefault();
+            var savedBook = context.Books
+                .Include(b => b.Category)
+                .Include(b => b.Publisher)
+                .FirstOrDefault();
+
             Assert.That(savedBook, Is.Not.Null);
             Assert.That(savedBook.CategoryId, Is.EqualTo(1));
             Assert.That(savedBook.Category.Name, Is.EqualTo("Fiction"));
+            Assert.That(savedBook.PublisherId, Is.EqualTo(1));
+            Assert.That(savedBook.Publisher.Name, Is.EqualTo("Test Publisher"));
         }
     }
 
