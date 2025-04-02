@@ -490,11 +490,18 @@ public class EntityScanner
             .GetMethod(nameof(GetSeedEntities))
             .MakeGenericMethod(entityType);
 
-        var typedEntities = getSeedEntitiesMethod.Invoke(this, null);
+        //var typedEntities = getSeedEntitiesMethod.Invoke(this, null);
 
         // 正しい型の配列を作成
         var arrayType = entityType.MakeArrayType();
+        //空の配列が返される
         var array = Array.CreateInstance(entityType, seedData.Count());
+
+        //seedDataはDictionary<string, object>のリスト
+        //entityTypeのプロパティ名と値を保持している
+        //これらをリフレクションを使って、arrayにコピーしていく
+        array = ConvertSeedDataToTypedArrayInternal(entityType, seedData);
+        
 
         // IEnumerable<T>をT[]に変換
         var castMethod = typeof(Enumerable)
@@ -505,11 +512,75 @@ public class EntityScanner
             .GetMethod("ToArray")
             .MakeGenericMethod(entityType);
 
-        var castedCollection = castMethod.Invoke(null, new object[] { typedEntities });
+        var castedCollection = castMethod.Invoke(null, new object[] { array });
         var result = toArrayMethod.Invoke(null, new object[] { castedCollection });
 
         return result;
     }
+
+    // シードデータを正しい型の配列に変換するヘルパーメソッド
+    private Array ConvertSeedDataToTypedArrayInternal(Type entityType, IEnumerable<object> seedData)
+    {
+        Debug.WriteLine($"シードデータを{entityType.Name}の配列に変換します");
+
+        // 正しい型の配列を作成
+        var seedDataList = seedData.ToList();
+        var array = Array.CreateInstance(entityType, seedDataList.Count);
+
+        // seedDataはDictionary<string, object>のリスト
+        // これらをリフレクションを使って、entityType型のオブジェクトに変換
+        for (int i = 0; i < seedDataList.Count; i++)
+        {
+            var dataItem = seedDataList[i] as IDictionary<string, object>;
+            if (dataItem == null)
+            {
+                Debug.WriteLine($"警告: インデックス{i}のシードデータをDictionaryとして取得できませんでした");
+                continue;
+            }
+
+            // entityTypeの新しいインスタンスを作成
+            var instance = Activator.CreateInstance(entityType);
+            Debug.WriteLine($"新しい{entityType.Name}インスタンスを作成しました");
+
+            // プロパティを設定
+            foreach (var kvp in dataItem)
+            {
+                var property = entityType.GetProperty(kvp.Key);
+                if (property != null && property.CanWrite)
+                {
+                    try
+                    {
+                        // 値の型変換が必要な場合は変換を行う
+                        var value = kvp.Value;
+                        if (value != null && property.PropertyType != value.GetType() &&
+                            value.GetType() != Nullable.GetUnderlyingType(property.PropertyType))
+                        {
+                            value = Convert.ChangeType(value,
+                                Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType);
+                        }
+
+                        property.SetValue(instance, value);
+                        Debug.WriteLine($"  プロパティを設定: {kvp.Key} = {kvp.Value}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"  プロパティ設定エラー: {kvp.Key} - {ex.Message}");
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine($"  プロパティが見つからないかWriteableではありません: {kvp.Key}");
+                }
+            }
+
+            // 配列にインスタンスを設定
+            array.SetValue(instance, i);
+        }
+
+        Debug.WriteLine($"{array.Length}個のアイテムを持つ{entityType.Name}[]を作成しました");
+        return array;
+    }
+
 
     // 適切なHasDataメソッドを探すヘルパーメソッド
     private MethodInfo FindApplicableHasDataMethod(Type builderType, Type entityType)
