@@ -1,10 +1,7 @@
-﻿using EntityScanner.Tests.DbContexts;
+﻿using System.Diagnostics;
+using EntityScanner.Tests.DbContexts;
 using EntityScanner.Tests.Entities;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 
 namespace EntityScanner.Tests;
 
@@ -31,8 +28,8 @@ public class EntityScannerPerformanceTests
         _entityScanner.Clear();
     }
 
-    private DbContextOptions<LibraryDbContext> _options = null;
-    private EntityScanner _entityScanner = null;
+    private DbContextOptions<LibraryDbContext> _options;
+    private EntityScanner _entityScanner;
 
     [Test]
     [Explicit("This test is resource-intensive and should be run manually")]
@@ -40,7 +37,7 @@ public class EntityScannerPerformanceTests
     {
         // Arrange - 1000個のカテゴリを作成
         var categories = new List<Category>();
-        for (int i = 1; i <= 1000; i++)
+        for (var i = 1; i <= 1000; i++)
         {
             categories.Add(new Category
             {
@@ -92,7 +89,7 @@ public class EntityScannerPerformanceTests
         var bookAuthors = new List<BookAuthor>();
 
         // 10人の著者を作成
-        for (int i = 1; i <= 10; i++)
+        for (var i = 1; i <= 10; i++)
         {
             authors.Add(new Author
             {
@@ -103,7 +100,7 @@ public class EntityScannerPerformanceTests
         }
 
         // 10の出版社を作成
-        for (int i = 1; i <= 10; i++)
+        for (var i = 1; i <= 10; i++)
         {
             var publisher = new Publisher
             {
@@ -114,7 +111,7 @@ public class EntityScannerPerformanceTests
             publishers.Add(publisher);
 
             // 各出版社に10冊の本を作成
-            for (int j = 1; j <= 10; j++)
+            for (var j = 1; j <= 10; j++)
             {
                 var bookId = (i - 1) * 10 + j;
                 var book = new Book
@@ -123,7 +120,7 @@ public class EntityScannerPerformanceTests
                     Title = $"Book {bookId}",
                     Author = $"Main Author {bookId % 10 + 1}",
                     ISBN = $"ISBN-{bookId.ToString().PadLeft(10, '0')}",
-                    PublicationYear = 2020 + (bookId % 5),
+                    PublicationYear = 2020 + bookId % 5,
                     Publisher = publisher,
                     PublisherId = publisher.Id,
                     CategoryId = 1 // すべて同じカテゴリに属する
@@ -131,7 +128,7 @@ public class EntityScannerPerformanceTests
                 books.Add(book);
 
                 // 各本に3人の著者を関連付ける
-                for (int k = 0; k < 3; k++)
+                for (var k = 0; k < 3; k++)
                 {
                     var authorIndex = (bookId + k) % 10;
                     var bookAuthor = new BookAuthor
@@ -186,7 +183,8 @@ public class EntityScannerPerformanceTests
 
         // Assert
         Console.WriteLine($"Time to apply complex object graph: {stopwatch.ElapsedMilliseconds}ms");
-        Console.WriteLine($"Number of entities - Category: 1, Publishers: {publishers.Count}, Books: {books.Count}, Authors: {authors.Count}, BookAuthors: {bookAuthors.Count}");
+        Console.WriteLine(
+            $"Number of entities - Category: 1, Publishers: {publishers.Count}, Books: {books.Count}, Authors: {authors.Count}, BookAuthors: {bookAuthors.Count}");
 
         // 適切な時間内に完了すること
         Assert.That(stopwatch.ElapsedMilliseconds, Is.LessThan(10000), "Should complete in less than 10 seconds");
@@ -284,7 +282,7 @@ public class EntityScannerPerformanceTests
             return;
         }
 
-        for (int i = 1; i <= childrenPerNode; i++)
+        for (var i = 1; i <= childrenPerNode; i++)
         {
             var path = $"{parent.Name.Replace("Root", "1")}.{i}";
             var child = new Category
@@ -309,7 +307,7 @@ public class EntityScannerPerformanceTests
         var parts = path.Split('.');
         var id = 0;
 
-        for (int i = 0; i < parts.Length; i++)
+        for (var i = 0; i < parts.Length; i++)
         {
             id = id * 10 + int.Parse(parts[i]);
         }

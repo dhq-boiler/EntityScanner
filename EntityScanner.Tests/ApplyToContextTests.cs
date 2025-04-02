@@ -50,9 +50,9 @@ public class ApplyToContextTests
         }
     }
 
-    private DbContextOptions<LibraryDbContext> _options = null;
+    private DbContextOptions<LibraryDbContext> _options;
     private string _connectionString;
-    private EntityScanner _entityScanner = null;
+    private EntityScanner _entityScanner;
 
     [Test]
     public void ApplyToContext_MultipleEntitiesOfSameType_ShouldAddAllToDbContext()
@@ -79,8 +79,10 @@ public class ApplyToContextTests
             var categories = context.Categories.ToList();
             Assert.That(categories.Count, Is.EqualTo(3), "All three categories should be added");
             Assert.That(categories.Select(c => c.Name).Contains("Fiction"), Is.True, "Fiction category should exist");
-            Assert.That(categories.Select(c => c.Name).Contains("Non-Fiction"), Is.True, "Non-Fiction category should exist");
-            Assert.That(categories.Select(c => c.Name).Contains("Programming"), Is.True, "Programming category should exist");
+            Assert.That(categories.Select(c => c.Name).Contains("Non-Fiction"), Is.True,
+                "Non-Fiction category should exist");
+            Assert.That(categories.Select(c => c.Name).Contains("Programming"), Is.True,
+                "Programming category should exist");
         }
     }
 
@@ -214,13 +216,15 @@ public class ApplyToContextTests
             Assert.That(book1Loaded.Category.Name, Is.EqualTo("Mystery"), "Book1 should have correct category");
             Assert.That(book1Loaded.Publisher.Name, Is.EqualTo("Mystery House"), "Book1 should have correct publisher");
             Assert.That(book1Loaded.Authors.Count, Is.EqualTo(1), "Book1 should have one author");
-            Assert.That(book1Loaded.Authors[0].Author.Name, Is.EqualTo("Agatha Christie"), "Book1 should have correct author");
+            Assert.That(book1Loaded.Authors[0].Author.Name, Is.EqualTo("Agatha Christie"),
+                "Book1 should have correct author");
 
             // 書籍2の関連確認
             Assert.That(book2Loaded.Category.Name, Is.EqualTo("Mystery"), "Book2 should have correct category");
             Assert.That(book2Loaded.Publisher.Name, Is.EqualTo("Mystery House"), "Book2 should have correct publisher");
             Assert.That(book2Loaded.Authors.Count, Is.EqualTo(1), "Book2 should have one author");
-            Assert.That(book2Loaded.Authors[0].Author.Name, Is.EqualTo("Arthur Conan Doyle"), "Book2 should have correct author");
+            Assert.That(book2Loaded.Authors[0].Author.Name, Is.EqualTo("Arthur Conan Doyle"),
+                "Book2 should have correct author");
         }
     }
 
@@ -525,7 +529,8 @@ public class ApplyToContextTests
             var fiction = rootFromDb.SubCategories.FirstOrDefault(c => c.Name == "Fiction");
             Assert.That(fiction, Is.Not.Null, "Fiction subcategory should exist");
             Assert.That(fiction.SubCategories.Count, Is.EqualTo(1), "Fiction should have 1 subcategory");
-            Assert.That(fiction.SubCategories[0].Name, Is.EqualTo("Science Fiction"), "SciFi subcategory name should be correct");
+            Assert.That(fiction.SubCategories[0].Name, Is.EqualTo("Science Fiction"),
+                "SciFi subcategory name should be correct");
         }
     }
 
@@ -642,9 +647,12 @@ public class ApplyToContextTests
             Assert.That(shelf2Loaded.BookInventories.Count, Is.EqualTo(1), "Shelf A2 should have 1 inventory");
             Assert.That(shelf3Loaded.BookInventories.Count, Is.EqualTo(1), "Shelf B1 should have 1 inventory");
 
-            Assert.That(shelf1Loaded.BookInventories[0].Book.Title, Is.EqualTo("Encyclopedia Vol 1"), "Shelf A1 should have Encyclopedia Vol 1");
-            Assert.That(shelf2Loaded.BookInventories[0].Book.Title, Is.EqualTo("Encyclopedia Vol 1"), "Shelf A2 should have Encyclopedia Vol 1");
-            Assert.That(shelf3Loaded.BookInventories[0].Book.Title, Is.EqualTo("Encyclopedia Vol 2"), "Shelf B1 should have Encyclopedia Vol 2");
+            Assert.That(shelf1Loaded.BookInventories[0].Book.Title, Is.EqualTo("Encyclopedia Vol 1"),
+                "Shelf A1 should have Encyclopedia Vol 1");
+            Assert.That(shelf2Loaded.BookInventories[0].Book.Title, Is.EqualTo("Encyclopedia Vol 1"),
+                "Shelf A2 should have Encyclopedia Vol 1");
+            Assert.That(shelf3Loaded.BookInventories[0].Book.Title, Is.EqualTo("Encyclopedia Vol 2"),
+                "Shelf B1 should have Encyclopedia Vol 2");
         }
     }
 }

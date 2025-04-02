@@ -1,11 +1,6 @@
 ﻿using EntityScanner.Tests.DbContexts;
 using EntityScanner.Tests.Entities;
 using Microsoft.EntityFrameworkCore;
-using NUnit.Framework;
-using System;
-using System.Linq;
-using System.IO;
-using System.Reflection;
 
 namespace EntityScanner.Tests;
 
@@ -56,9 +51,9 @@ public class ApplyToModelBuilderTests
         }
     }
 
-    private DbContextOptions<LibraryDbContext> _options = null;
+    private DbContextOptions<LibraryDbContext> _options;
     private string _connectionString;
-    private EntityScanner _entityScanner = null;
+    private EntityScanner _entityScanner;
 
     [Test]
     public async Task ApplyAToModelBuilder_DuplicateRecords_ShouldUpdate()
@@ -363,7 +358,7 @@ public class ApplyToModelBuilderTests
 //            // データベースを作成（この過程でOnModelCreatingが呼ばれ、シードデータが適用される）
 //            await testContext.Database.EnsureCreatedAsync();
 //            //testContext.GetModelBuilderWithBaseConfiguration();
-            
+
 //        }
 
 //        // 新しい通常のコンテキストを返す（テスト検証用）
@@ -475,7 +470,10 @@ public class TestLibraryDbContext : LibraryDbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        if (modelBuilder == null) throw new ArgumentNullException(nameof(modelBuilder));
+        if (modelBuilder == null)
+        {
+            throw new ArgumentNullException(nameof(modelBuilder));
+        }
 
         // 基底クラスのOnModelCreatingを呼び出して、基本的なモデル構成を適用
         base.OnModelCreating(modelBuilder);

@@ -5,7 +5,9 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("EntityScanner")]
-[assembly: AssemblyDescription("Seed data management utility for Entity Framework Core. Automatically manages foreign keys and hierarchical object relationships.")]
+[assembly:
+    AssemblyDescription(
+        "Seed data management utility for Entity Framework Core. Automatically manages foreign keys and hierarchical object relationships.")]
 [assembly: AssemblyConfiguration("Release")]
 [assembly: AssemblyCompany("dhq_boiler")]
 [assembly: AssemblyProduct("EntityScanner")]
