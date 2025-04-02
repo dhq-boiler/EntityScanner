@@ -217,6 +217,8 @@ public class ApplyToModelBuilderTests
     [Test]
     public void ApplyToModelBuilder_WithHierarchicalData_ShouldApplySeedData()
     {
+        Console.WriteLine("ApplyToModelBuilder_WithHierarchicalData_ShouldApplySeedData テストを開始");
+
         // Arrange - 階層構造を持つデータの準備
         var rootCategory = new Category { Id = 1, Name = "Root", Description = "Root category" };
         var childCategory = new Category
@@ -230,17 +232,37 @@ public class ApplyToModelBuilderTests
 
         rootCategory.SubCategories.Add(childCategory);
 
+        Console.WriteLine("エンティティを登録します");
+        Console.WriteLine($"rootCategory: Id={rootCategory.Id}, Name={rootCategory.Name}");
+        Console.WriteLine($"childCategory: Id={childCategory.Id}, Name={childCategory.Name}, ParentCategoryId={childCategory.ParentCategoryId}");
+
         _entityScanner.RegisterEntity(rootCategory);
 
         // Act & Assert
+        Console.WriteLine("コンテキストを作成します");
         using (var context = CreateContextWithModelBuilder())
         {
+            Console.WriteLine("作成されたデータベースの内容を検証します");
             var categories = context.Categories.ToList();
+            Console.WriteLine($"取得したカテゴリ数: {categories.Count}");
+
+            foreach (var cat in categories)
+            {
+                Console.WriteLine($"カテゴリ: Id={cat.Id}, Name={cat.Name}, ParentCategoryId={cat.ParentCategoryId}");
+            }
+
             Assert.That(categories, Has.Count.EqualTo(2), "Both categories should be seeded");
 
             var childFromDb = categories.FirstOrDefault(c => c.Id == 2);
-            Assert.That(childFromDb, Is.Not.Null, "Child category should be seeded");
-            Assert.That(childFromDb.ParentCategoryId, Is.EqualTo(1), "ParentCategoryId should be set correctly");
+            if (childFromDb != null)
+            {
+                Console.WriteLine($"子カテゴリを検証: Id={childFromDb.Id}, ParentCategoryId={childFromDb.ParentCategoryId}");
+                Assert.That(childFromDb.ParentCategoryId, Is.EqualTo(1), "ParentCategoryId should be set correctly");
+            }
+            else
+            {
+                Console.WriteLine("子カテゴリが見つかりません");
+            }
         }
     }
 
@@ -297,21 +319,29 @@ public class ApplyToModelBuilderTests
     /// </summary>
     private LibraryDbContext CreateContextWithModelBuilder()
     {
-        // まず、テスト用のデータベースを削除して新たに作成する
+        Console.WriteLine("CreateContextWithModelBuilder メソッドを開始");
+
+        // まず、テスト用のデータベースを削除する
         using (var context = new LibraryDbContext(_options))
         {
+            Console.WriteLine("データベースを削除します");
             context.Database.EnsureDeleted();
         }
 
+        Console.WriteLine("TestLibraryDbContext を作成します");
         // テスト用のカスタムDbContextを作成
+        // このコンストラクタでEntityScannerを受け取り、OnModelCreatingで使用する
         var testContext = new TestLibraryDbContext(_options, _entityScanner);
 
+        Console.WriteLine("データベースを作成します（この過程でOnModelCreatingが呼ばれます）");
         // データベースを作成（この過程でOnModelCreatingが呼ばれ、シードデータが適用される）
         testContext.Database.EnsureCreated();
 
+        Console.WriteLine("変更を保存します");
         // データベースに変更を保存
         testContext.SaveChanges();
 
+        Console.WriteLine("新しいコンテキストを返します");
         // 新しい通常のコンテキストを返す（テスト検証用）
         return new LibraryDbContext(_options);
     }
@@ -417,13 +447,20 @@ public class TestLibraryDbContext : LibraryDbContext
         : base(options)
     {
         _entityScanner = entityScanner;
+        Console.WriteLine("TestLibraryDbContext コンストラクタが呼び出されました");
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        Console.WriteLine("TestLibraryDbContext.OnModelCreating が呼び出されました");
+
+        // 基底クラスのOnModelCreatingを呼び出して、基本的なモデル構成を適用
         base.OnModelCreating(modelBuilder);
+        Console.WriteLine("base.OnModelCreating が完了しました");
 
         // エンティティスキャナーを使用してシードデータを適用
+        Console.WriteLine("EntityScannerを使用してシードデータを適用します");
         _entityScanner.ApplyToModelBuilder(modelBuilder);
+        Console.WriteLine("シードデータの適用が完了しました");
     }
 }

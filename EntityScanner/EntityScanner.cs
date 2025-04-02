@@ -125,16 +125,30 @@ public class EntityScanner
         var entities = GetEntities<TEntity>().ToList();
         var result = new List<TEntity>();
 
+        Console.WriteLine($"GetSeedEntities: エンティティ数 = {entities.Count}");
+
         foreach (var entity in entities)
         {
             // ナビゲーションプロパティを含まない新しいインスタンスを作成
             var clone = Activator.CreateInstance<TEntity>();
+            Console.WriteLine($"新しいインスタンスを作成: {typeof(TEntity).Name}");
 
-            // 基本プロパティのみをコピー
-            foreach (var prop in typeof(TEntity).GetProperties()
-                         .Where(p => p.CanWrite && IsBasicType(p.PropertyType)))
+            // 基本プロパティとFKプロパティをコピー
+            foreach (var prop in typeof(TEntity).GetProperties())
             {
-                prop.SetValue(clone, prop.GetValue(entity));
+                if (prop.CanWrite)
+                {
+                    if (IsBasicType(prop.PropertyType) || prop.Name.EndsWith("Id"))
+                    {
+                        var value = prop.GetValue(entity);
+                        prop.SetValue(clone, value);
+                        Console.WriteLine($"  プロパティをコピー: {prop.Name} = {value}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"  スキップしたプロパティ: {prop.Name} (ナビゲーションプロパティ)");
+                    }
+                }
             }
 
             result.Add(clone);
@@ -293,8 +307,11 @@ public class EntityScanner
             var entityType = kvp.Key;
             var entities = kvp.Value;
 
+            Console.WriteLine($"処理中のエンティティタイプ: {entityType.Name}, エンティティ数: {entities.Count}");
+
             if (!entities.Any())
             {
+                Console.WriteLine($"{entityType.Name}にはエンティティがありません");
                 continue; // エンティティがなければスキップ
             }
 
@@ -312,7 +329,24 @@ public class EntityScanner
 
                 if (seedData == null || !seedData.Any())
                 {
+                    Console.WriteLine($"{entityType.Name}のシードデータが空です");
                     continue; // シードデータがなければスキップ
+                }
+
+                Console.WriteLine($"{entityType.Name}のシードデータ数: {seedData.Count()}");
+
+                // シードデータの内容を確認
+                foreach (var item in seedData)
+                {
+                    var dict = item as IDictionary<string, object>;
+                    if (dict != null)
+                    {
+                        Console.WriteLine("シードデータの内容:");
+                        foreach (var pair in dict)
+                        {
+                            Console.WriteLine($"  {pair.Key}: {pair.Value}");
+                        }
+                    }
                 }
 
                 // ModelBuilderのEntityメソッドを取得
@@ -324,36 +358,45 @@ public class EntityScanner
 
                 if (entityMethod == null)
                 {
+                    Console.WriteLine($"{entityType.Name}のEntityメソッドが見つかりません");
                     throw new InvalidOperationException($"Entity method not found for {entityType.Name}");
                 }
 
                 // EntityTypeBuilderを生成
                 var genericEntityMethod = entityMethod.MakeGenericMethod(entityType);
                 var entityBuilder = genericEntityMethod.Invoke(modelBuilder, null);
+                Console.WriteLine($"{entityType.Name}のEntityTypeBuilderを生成しました");
 
-                // HasDataメソッドの検索とパラメータ変換
-                // 以下の問題点: HasDataはSystem.Object[]ではなく、具体的な型T[]を期待している
+                // entityBuilderの型を取得
                 var builderType = entityBuilder.GetType();
-
-                // 具体的なHasDataメソッドの探索
-                var hasDataMethodName = "HasData";
 
                 // シードデータを正しい型の配列に変換
                 var seedDataArray = ConvertSeedDataToTypedArray(entityType, seedData);
+                Console.WriteLine($"変換後のシードデータの型: {seedDataArray.GetType().FullName}");
 
                 // HasDataメソッドを正しいシグネチャで取得
                 var hasDataMethod = FindApplicableHasDataMethod(builderType, entityType);
 
                 if (hasDataMethod == null)
                 {
+                    Console.WriteLine($"{entityType.Name}のHasDataメソッドが見つかりません");
                     throw new InvalidOperationException($"Compatible HasData method not found for {entityType.Name}");
                 }
 
+                Console.WriteLine($"HasDataメソッドを呼び出します: {hasDataMethod.Name}");
                 // HasDataメソッドを呼び出し
                 hasDataMethod.Invoke(entityBuilder, new object[] { seedDataArray });
+                Console.WriteLine($"{entityType.Name}のHasDataメソッドの呼び出しが完了しました");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"エラー発生: {ex.Message}");
+                Console.WriteLine($"詳細: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"内部例外: {ex.InnerException.Message}");
+                    Console.WriteLine($"内部例外詳細: {ex.InnerException.StackTrace}");
+                }
                 throw new InvalidOperationException(
                     $"Error applying seed data for entity type {entityType.Name}: {ex.Message}", ex);
             }
