@@ -19,14 +19,56 @@ namespace EntityScanner;
 public class EntityScanner
 {
     private readonly Dictionary<Type, IList<object>> _entities = new();
+
     private readonly HashSet<object> _processedEntities = new();
+
+    // カスタム型の変換を登録するための辞書
+    private readonly Dictionary<Type, Func<object, string>> _typeConverters = new();
 
     public EntityScanner(DuplicateEntityBehavior behavior = DuplicateEntityBehavior.ThrowException)
     {
         DuplicateBehavior = behavior;
+        // IEntitySerializable を実装する型のコンバータを自動登録
+        RegisterDefaultConverters();
     }
 
     public DuplicateEntityBehavior DuplicateBehavior { get; set; } = DuplicateEntityBehavior.ThrowException;
+
+    /// <summary>
+    ///     カスタム型のコンバータを登録
+    /// </summary>
+    /// <typeparam name="T">変換対象の型</typeparam>
+    /// <param name="converter">変換関数</param>
+    public void RegisterTypeConverter<T>(Func<T, string> converter) where T : class
+    {
+        _typeConverters[typeof(T)] = obj => converter((T)obj);
+    }
+
+    /// <summary>
+    ///     初期化時にIEntitySerializableを実装する型のコンバータを自動登録
+    /// </summary>
+    private void RegisterDefaultConverters()
+    {
+        // アセンブリ内のIEntitySerializableを実装する全ての型を検索
+        var entitySerializableTypes = AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(a => a.GetTypes())
+            .Where(t => t.IsClass && !t.IsAbstract && typeof(IEntitySerializable).IsAssignableFrom(t));
+
+        foreach (var type in entitySerializableTypes)
+        {
+            _typeConverters[type] = obj => ((IEntitySerializable)obj)?.ToEntityString();
+        }
+    }
+
+    /// <summary>
+    ///     指定された型がカスタムコンバータを持っているかチェック
+    /// </summary>
+    /// <param name="type">チェックする型</param>
+    /// <returns>コンバータが登録されていればtrue</returns>
+    private bool HasTypeConverter(Type type)
+    {
+        return _typeConverters.ContainsKey(type);
+    }
 
     /// <summary>
     ///     エンティティを登録します。ナビゲーションプロパティも再帰的に処理されます。
@@ -103,6 +145,9 @@ public class EntityScanner
     /// </summary>
     /// <typeparam name="T">エンティティの型</typeparam>
     /// <returns>HasDataで使用可能なオブジェクトのコレクション</returns>
+    /// <summary>
+    ///     オーバーライドして、登録されたカスタム型を処理できるように拡張
+    /// </summary>
     public IEnumerable<object> GetSeedData<T>() where T : class
     {
         var entities = GetEntities<T>();
@@ -110,10 +155,42 @@ public class EntityScanner
 
         foreach (var entity in entities)
         {
-            // 基本プロパティのみを含む匿名オブジェクトを作成
-            var properties = typeof(T).GetProperties()
-                .Where(p => IsBasicType(p.PropertyType))
-                .ToDictionary(p => p.Name, p => p.GetValue(entity));
+            // プロパティを収集する辞書
+            var properties = new Dictionary<string, object>();
+
+            foreach (var prop in typeof(T).GetProperties())
+            {
+                var value = prop.GetValue(entity);
+
+                // null値はスキップ
+                if (value == null)
+                {
+                    continue;
+                }
+
+                // 基本型またはIDプロパティの場合はそのまま追加
+                if (IsBasicType(prop.PropertyType) || prop.Name.EndsWith("Id"))
+                {
+                    properties[prop.Name] = value;
+                    continue;
+                }
+
+                // カスタムコンバータが登録されている型の場合
+                if (HasTypeConverter(prop.PropertyType))
+                {
+                    var converter = _typeConverters[prop.PropertyType];
+                    properties[prop.Name] = converter(value);
+                    continue;
+                }
+
+                // IEntitySerializableインターフェースを実装している場合
+                if (value is IEntitySerializable serializable)
+                {
+                    properties[prop.Name] = serializable.ToEntityString();
+                }
+
+                // その他のナビゲーションプロパティはスキップ
+            }
 
             result.Add(properties);
         }
