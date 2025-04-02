@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Dynamic;
 using System.Linq;
 using System.Reflection;
@@ -125,16 +126,30 @@ public class EntityScanner
         var entities = GetEntities<TEntity>().ToList();
         var result = new List<TEntity>();
 
+        Debug.WriteLine($"GetSeedEntities: エンティティ数 = {entities.Count}");
+
         foreach (var entity in entities)
         {
             // ナビゲーションプロパティを含まない新しいインスタンスを作成
             var clone = Activator.CreateInstance<TEntity>();
+            Debug.WriteLine($"新しいインスタンスを作成: {typeof(TEntity).Name}");
 
-            // 基本プロパティのみをコピー
-            foreach (var prop in typeof(TEntity).GetProperties()
-                         .Where(p => p.CanWrite && IsBasicType(p.PropertyType)))
+            // 基本プロパティとFKプロパティをコピー
+            foreach (var prop in typeof(TEntity).GetProperties())
             {
-                prop.SetValue(clone, prop.GetValue(entity));
+                if (prop.CanWrite)
+                {
+                    if (IsBasicType(prop.PropertyType) || prop.Name.EndsWith("Id"))
+                    {
+                        var value = prop.GetValue(entity);
+                        prop.SetValue(clone, value);
+                        Debug.WriteLine($"  プロパティをコピー: {prop.Name} = {value}");
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"  スキップしたプロパティ: {prop.Name} (ナビゲーションプロパティ)");
+                    }
+                }
             }
 
             result.Add(clone);
@@ -291,28 +306,22 @@ public class EntityScanner
         foreach (var kvp in _entities)
         {
             var entityType = kvp.Key;
+            var entities = kvp.Value;
+
+            Debug.WriteLine($"処理中のエンティティタイプ: {entityType.Name}, エンティティ数: {entities.Count}");
+
+            if (!entities.Any())
+            {
+                Debug.WriteLine($"{entityType.Name}にはエンティティがありません");
+                continue; // エンティティがなければスキップ
+            }
 
             try
             {
                 // GetTypeInfoを使用してリフレクション情報を取得
                 var entityTypeInfo = entityType.GetTypeInfo();
 
-                // Entityメソッドを特定（パラメータなしの汎用メソッド）
-                var entityMethod = typeof(ModelBuilder).GetMethods()
-                    .Where(m => m.Name == "Entity")
-                    .Where(m => m.IsGenericMethod)
-                    .Where(m => m.GetParameters().Length == 0)
-                    .FirstOrDefault();
-
-                if (entityMethod == null)
-                {
-                    throw new InvalidOperationException($"Entity method not found for {entityType.Name}");
-                }
-
-                // 特定したメソッドでジェネリック型を指定
-                var genericEntityMethod = entityMethod.MakeGenericMethod(entityType);
-
-                // GetSeedDataの結果を取得
+                // 匿名オブジェクトに変換するためのシードデータを取得
                 var getSeedDataMethod = typeof(EntityScanner)
                     .GetMethod(nameof(GetSeedData))
                     .MakeGenericMethod(entityType);
@@ -321,44 +330,144 @@ public class EntityScanner
 
                 if (seedData == null || !seedData.Any())
                 {
+                    Debug.WriteLine($"{entityType.Name}のシードデータが空です");
                     continue; // シードデータがなければスキップ
                 }
 
-                // EntityTypeBuilderインスタンスを取得
-                var entityBuilder = genericEntityMethod.Invoke(modelBuilder, null);
+                Debug.WriteLine($"{entityType.Name}のシードデータ数: {seedData.Count()}");
 
-                // HasDataメソッドを特定
-                var hasDataMethodName = "HasData";
+                // シードデータの内容を確認
+                foreach (var item in seedData)
+                {
+                    var dict = item as IDictionary<string, object>;
+                    if (dict != null)
+                    {
+                        Debug.WriteLine("シードデータの内容:");
+                        foreach (var pair in dict)
+                        {
+                            Debug.WriteLine($"  {pair.Key}: {pair.Value}");
+                        }
+                    }
+                }
+
+                // ModelBuilderのEntityメソッドを取得
+                var entityMethod = typeof(ModelBuilder).GetMethods()
+                    .Where(m => m.Name == "Entity")
+                    .Where(m => m.IsGenericMethod)
+                    .Where(m => m.GetParameters().Length == 0)
+                    .FirstOrDefault();
+
+                if (entityMethod == null)
+                {
+                    Debug.WriteLine($"{entityType.Name}のEntityメソッドが見つかりません");
+                    throw new InvalidOperationException($"Entity method not found for {entityType.Name}");
+                }
+
+                // EntityTypeBuilderを生成
+                var genericEntityMethod = entityMethod.MakeGenericMethod(entityType);
+                var entityBuilder = genericEntityMethod.Invoke(modelBuilder, null);
+                Debug.WriteLine($"{entityType.Name}のEntityTypeBuilderを生成しました");
+
+                // entityBuilderの型を取得
                 var builderType = entityBuilder.GetType();
 
-                // HasDataのオーバーロードを検索（IEnumerable<object>または配列を受け取るもの）
-                var methods = builderType.GetMethods()
-                    .Where(m => m.Name == hasDataMethodName)
-                    .ToList();
+                // シードデータを正しい型の配列に変換
+                var seedDataArray = ConvertSeedDataToTypedArray(entityType, seedData);
+                Debug.WriteLine($"変換後のシードデータの型: {seedDataArray.GetType().FullName}");
 
-                // 適切なHasDataメソッドを選択
-                var hasDataMethod = methods
-                    .FirstOrDefault(m => m.GetParameters().Length == 1 &&
-                                       (m.GetParameters()[0].ParameterType.IsArray ||
-                                        typeof(IEnumerable<object>).IsAssignableFrom(m.GetParameters()[0].ParameterType)));
+                // HasDataメソッドを正しいシグネチャで取得
+                var hasDataMethod = FindApplicableHasDataMethod(builderType, entityType);
 
                 if (hasDataMethod == null)
                 {
-                    throw new InvalidOperationException($"HasData method not found for {entityType.Name}");
+                    Debug.WriteLine($"{entityType.Name}のHasDataメソッドが見つかりません");
+                    throw new InvalidOperationException($"Compatible HasData method not found for {entityType.Name}");
                 }
 
-                // HasDataに渡すオブジェクトを配列に変換
-                var seedDataArray = seedData.ToArray();
-
+                Debug.WriteLine($"HasDataメソッドを呼び出します: {hasDataMethod.Name}");
                 // HasDataメソッドを呼び出し
                 hasDataMethod.Invoke(entityBuilder, new object[] { seedDataArray });
+                Debug.WriteLine($"{entityType.Name}のHasDataメソッドの呼び出しが完了しました");
             }
             catch (Exception ex)
             {
-                // エラーの詳細をより具体的に捕捉
-                throw new InvalidOperationException($"Error applying seed data for entity type {entityType.Name}: {ex.Message}", ex);
+                Debug.WriteLine($"エラー発生: {ex.Message}");
+                Debug.WriteLine($"詳細: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Debug.WriteLine($"内部例外: {ex.InnerException.Message}");
+                    Debug.WriteLine($"内部例外詳細: {ex.InnerException.StackTrace}");
+                }
+                throw new InvalidOperationException(
+                    $"Error applying seed data for entity type {entityType.Name}: {ex.Message}", ex);
             }
         }
+    }
+
+    // シードデータを正しい型の配列に変換するヘルパーメソッド
+    private object ConvertSeedDataToTypedArray(Type entityType, IEnumerable<object> seedData)
+    {
+        // GetSeedEntitiesメソッドを使用して型付きのエンティティを取得
+        var getSeedEntitiesMethod = typeof(EntityScanner)
+            .GetMethod(nameof(GetSeedEntities))
+            .MakeGenericMethod(entityType);
+
+        var typedEntities = getSeedEntitiesMethod.Invoke(this, null);
+
+        // 正しい型の配列を作成
+        var arrayType = entityType.MakeArrayType();
+        var array = Array.CreateInstance(entityType, seedData.Count());
+
+        // IEnumerable<T>をT[]に変換
+        var castMethod = typeof(Enumerable)
+            .GetMethod("Cast")
+            .MakeGenericMethod(entityType);
+
+        var toArrayMethod = typeof(Enumerable)
+            .GetMethod("ToArray")
+            .MakeGenericMethod(entityType);
+
+        var castedCollection = castMethod.Invoke(null, new object[] { typedEntities });
+        var result = toArrayMethod.Invoke(null, new object[] { castedCollection });
+
+        return result;
+    }
+
+    // 適切なHasDataメソッドを探すヘルパーメソッド
+    private MethodInfo FindApplicableHasDataMethod(Type builderType, Type entityType)
+    {
+        var methods = builderType.GetMethods().Where(m => m.Name == "HasData").ToList();
+
+        // 最適なHasDataメソッドを探す
+        // 1. 単一のエンティティを受け取るメソッド
+        var singleEntityMethod = methods.FirstOrDefault(m =>
+            m.GetParameters().Length == 1 &&
+            m.GetParameters()[0].ParameterType == entityType);
+
+        if (singleEntityMethod != null)
+        {
+            return singleEntityMethod;
+        }
+
+        // 2. エンティティの配列を受け取るメソッド
+        var arrayMethod = methods.FirstOrDefault(m =>
+            m.GetParameters().Length == 1 &&
+            m.GetParameters()[0].ParameterType.IsArray &&
+            m.GetParameters()[0].ParameterType.GetElementType() == entityType);
+
+        if (arrayMethod != null)
+        {
+            return arrayMethod;
+        }
+
+        // 3. IEnumerable<エンティティ>を受け取るメソッド
+        var enumerableMethod = methods.FirstOrDefault(m =>
+            m.GetParameters().Length == 1 &&
+            m.GetParameters()[0].ParameterType.IsGenericType &&
+            m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(IEnumerable<>) &&
+            m.GetParameters()[0].ParameterType.GetGenericArguments()[0] == entityType);
+
+        return enumerableMethod;
     }
 
     // エンティティのプロパティを更新するヘルパーメソッド
