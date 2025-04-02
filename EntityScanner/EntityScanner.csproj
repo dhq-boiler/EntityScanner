@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
+		<TargetFrameworks>net8.0;net9.0</TargetFrameworks>
 		<LangVersion>latest</LangVersion>
 		<RootNamespace>EntityScanner</RootNamespace>
 		<AssemblyName>EntityScanner</AssemblyName>
@@ -12,6 +12,8 @@
 		<Description>Seed data management utility for Entity Framework Core. Generates seed data for EF Core from hierarchical object models and automatically manages foreign keys.</Description>
 		<PackageTags>entityframework;efcore;seed;data;migration</PackageTags>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<IncludeSymbols>True</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 	</PropertyGroup>
 
 	<ItemGroup>
