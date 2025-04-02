@@ -19,7 +19,9 @@ namespace EntityScanner;
 public class EntityScanner
 {
     private readonly Dictionary<Type, IList<object>> _entities = new();
+
     private readonly HashSet<object> _processedEntities = new();
+
     // カスタム型の変換を登録するための辞書
     private readonly Dictionary<Type, Func<object, string>> _typeConverters = new();
 
@@ -33,7 +35,7 @@ public class EntityScanner
     public DuplicateEntityBehavior DuplicateBehavior { get; set; } = DuplicateEntityBehavior.ThrowException;
 
     /// <summary>
-    /// カスタム型のコンバータを登録
+    ///     カスタム型のコンバータを登録
     /// </summary>
     /// <typeparam name="T">変換対象の型</typeparam>
     /// <param name="converter">変換関数</param>
@@ -43,7 +45,7 @@ public class EntityScanner
     }
 
     /// <summary>
-    /// 初期化時にIEntitySerializableを実装する型のコンバータを自動登録
+    ///     初期化時にIEntitySerializableを実装する型のコンバータを自動登録
     /// </summary>
     private void RegisterDefaultConverters()
     {
@@ -59,7 +61,7 @@ public class EntityScanner
     }
 
     /// <summary>
-    /// 指定された型がカスタムコンバータを持っているかチェック
+    ///     指定された型がカスタムコンバータを持っているかチェック
     /// </summary>
     /// <param name="type">チェックする型</param>
     /// <returns>コンバータが登録されていればtrue</returns>
@@ -144,7 +146,7 @@ public class EntityScanner
     /// <typeparam name="T">エンティティの型</typeparam>
     /// <returns>HasDataで使用可能なオブジェクトのコレクション</returns>
     /// <summary>
-    /// オーバーライドして、登録されたカスタム型を処理できるように拡張
+    ///     オーバーライドして、登録されたカスタム型を処理できるように拡張
     /// </summary>
     public IEnumerable<object> GetSeedData<T>() where T : class
     {
@@ -185,7 +187,6 @@ public class EntityScanner
                 if (value is IEntitySerializable serializable)
                 {
                     properties[prop.Name] = serializable.ToEntityString();
-                    continue;
                 }
 
                 // その他のナビゲーションプロパティはスキップ
