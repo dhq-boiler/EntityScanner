@@ -318,15 +318,14 @@ public class EntityScanner
 
             try
             {
+                // 重複エンティティの処理
+                var distinctEntities = HandleDuplicateEntities(entities, entityType);
+
                 // GetTypeInfoを使用してリフレクション情報を取得
                 var entityTypeInfo = entityType.GetTypeInfo();
 
-                // 匿名オブジェクトに変換するためのシードデータを取得
-                var getSeedDataMethod = typeof(EntityScanner)
-                    .GetMethod(nameof(GetSeedData))
-                    .MakeGenericMethod(entityType);
-
-                var seedData = getSeedDataMethod.Invoke(this, null) as IEnumerable<object>;
+                // 匿名オブジェクトに変換するためのシードデータを取得（重複処理後のエンティティを使用）
+                var seedData = GetSeedDataFromEntities(distinctEntities, entityType);
 
                 if (seedData == null || !seedData.Any())
                 {
@@ -402,6 +401,85 @@ public class EntityScanner
                     $"Error applying seed data for entity type {entityType.Name}: {ex.Message}", ex);
             }
         }
+    }
+
+    // 重複エンティティを処理するヘルパーメソッド
+    private IList<object> HandleDuplicateEntities(IList<object> entities, Type entityType)
+    {
+        // DuplicateEntityBehaviorが無視または例外の場合は、EntityScannerに登録された段階で
+        // 既に処理されているはずなので、ここでは追加の処理は不要
+        if (DuplicateBehavior == DuplicateEntityBehavior.ThrowException ||
+            DuplicateBehavior == DuplicateEntityBehavior.Ignore)
+        {
+            return entities;
+        }
+
+        // PKプロパティを見つける
+        var pkProperty = FindPrimaryKeyProperty(entities.First());
+        if (pkProperty == null)
+        {
+            Debug.WriteLine($"{entityType.Name}の主キープロパティが見つかりません");
+            return entities; // PKが見つからない場合はそのまま返す
+        }
+
+        // エンティティをPK値でグループ化
+        var groupedEntities = entities
+            .GroupBy(e => pkProperty.GetValue(e)?.ToString())
+            .ToList();
+
+        // 重複がない場合はそのまま返す
+        if (groupedEntities.All(g => g.Count() == 1))
+        {
+            return entities;
+        }
+
+        var result = new List<object>();
+
+        // DuplicateEntityBehaviorに応じた処理
+        switch (DuplicateBehavior)
+        {
+            case DuplicateEntityBehavior.Update:
+                // 各グループから最後のエンティティを選択（最新とみなす）
+                foreach (var group in groupedEntities)
+                {
+                    result.Add(group.Last());
+                }
+                Debug.WriteLine($"{entityType.Name}の重複エンティティを更新モードで処理しました: {entities.Count} -> {result.Count}");
+                break;
+
+            case DuplicateEntityBehavior.AddAlways:
+                // AddAlwaysの場合、PKを変更する必要があるが、HasDataではPKは変更できないため
+                // 警告を出して最初のエンティティのみ残す
+                Debug.WriteLine($"警告: ModelBuilder.HasDataでは重複PKを持つエンティティを追加できません。最初のエンティティのみ使用します。");
+                foreach (var group in groupedEntities)
+                {
+                    result.Add(group.First());
+                }
+                break;
+
+            default:
+                return entities; // 他の場合はそのまま返す
+        }
+
+        return result;
+    }
+
+    // 指定されたエンティティリストからシードデータを取得するヘルパーメソッド
+    private IEnumerable<object> GetSeedDataFromEntities(IList<object> entities, Type entityType)
+    {
+        var result = new List<object>();
+
+        foreach (var entity in entities)
+        {
+            // 基本プロパティのみを含む匿名オブジェクトを作成
+            var properties = entityType.GetProperties()
+                .Where(p => IsBasicType(p.PropertyType))
+                .ToDictionary(p => p.Name, p => p.GetValue(entity));
+
+            result.Add(properties);
+        }
+
+        return result;
     }
 
     // シードデータを正しい型の配列に変換するヘルパーメソッド
