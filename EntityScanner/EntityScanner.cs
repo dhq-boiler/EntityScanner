@@ -255,67 +255,71 @@ public class EntityScanner
     /// </summary>
     /// <param name="navigationProp">ナビゲーションプロパティ</param>
     /// <returns>関連付けられた外部キープロパティ、見つからない場合はnull</returns>
-    private PropertyInfo FindForeignKeyProperty(PropertyInfo navigationProp)
+    private PropertyInfo FindForeignKeyProperty(PropertyInfo navigationProperty)
     {
-        if (navigationProp == null)
+        if (navigationProperty == null)
         {
             return null;
         }
 
-        var declaringType = navigationProp.DeclaringType;
+        var declaringType = navigationProperty.DeclaringType;
         if (declaringType == null)
         {
             return null;
         }
 
-        // ForeignKeyAttributeが指定されている場合、それを使用
-        var foreignKeyAttr = navigationProp.GetCustomAttributes(true)
-            .FirstOrDefault(a => a.GetType().Name == "ForeignKeyAttribute");
-
-        if (foreignKeyAttr != null)
+        // 1. [ForeignKey] 属性を持つプロパティを優先的に探す
+        var properties = declaringType.GetProperties();
+        foreach (var prop in properties)
         {
-            // ForeignKeyAttributeからプロパティ名を取得
-            var foreignKeyName = foreignKeyAttr.GetType().GetProperty("Name")?.GetValue(foreignKeyAttr) as string;
-            if (!string.IsNullOrEmpty(foreignKeyName))
+            var foreignKeyAttr = prop.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.Schema.ForeignKeyAttribute), true)
+                                  .FirstOrDefault() as System.ComponentModel.DataAnnotations.Schema.ForeignKeyAttribute;
+
+            if (foreignKeyAttr != null && foreignKeyAttr.Name == navigationProperty.Name)
             {
-                return declaringType.GetProperty(foreignKeyName);
+                return prop;
             }
         }
 
-        // 命名規則に基づいて外部キープロパティを探す
-        // 一般的な規則: NavigationPropertyName + "Id"
-        var conventionalFkName = $"{navigationProp.Name}Id";
-        var fkProperty = declaringType.GetProperty(conventionalFkName);
-        if (fkProperty != null && IsValidForeignKeyProperty(fkProperty))
+        // 2. 一般的な命名規則に基づいて外部キープロパティを探す
+        var navPropertyType = navigationProperty.PropertyType;
+        var possibleFkNames = new[]
         {
-            return fkProperty;
-        }
+            $"{navigationProperty.Name}Id",
+            $"{navPropertyType.Name}Id"
+        };
 
-        // 他の一般的な命名規則も試す (NavigationPropertyTypeNameにも対応)
-        if (navigationProp.PropertyType != null)
+        foreach (var fkName in possibleFkNames)
         {
-            var navTypeName = navigationProp.PropertyType.Name;
-            conventionalFkName = $"{navTypeName}Id";
-            fkProperty = declaringType.GetProperty(conventionalFkName);
+            var fkProperty = declaringType.GetProperty(fkName);
             if (fkProperty != null && IsValidForeignKeyProperty(fkProperty))
             {
                 return fkProperty;
             }
         }
 
-        // 見つからない場合は、"Id"で終わるすべてのプロパティを検索
-        var potentialFkProperties = declaringType.GetProperties()
-            .Where(p => p.Name.EndsWith("Id") && IsValidForeignKeyProperty(p))
-            .ToList();
-
-        if (potentialFkProperties.Count == 1)
+        // 3. 他のナビゲーションプロパティに関連する [InverseProperty] 属性を探す
+        foreach (var prop in properties)
         {
-            // 候補が1つだけなら、それを返す
-            return potentialFkProperties[0];
+            var inversePropertyAttr = prop.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.Schema.InversePropertyAttribute), true)
+                                     .FirstOrDefault() as System.ComponentModel.DataAnnotations.Schema.InversePropertyAttribute;
+
+            if (inversePropertyAttr != null && inversePropertyAttr.Property == navigationProperty.Name)
+            {
+                // InversePropertyが見つかった場合、対応する外部キーを探す
+                var relatedEntityType = prop.PropertyType;
+                var foreignKeyProps = declaringType.GetProperties()
+                                      .Where(p => p.Name.EndsWith("Id") && IsValidForeignKeyProperty(p))
+                                      .ToList();
+
+                if (foreignKeyProps.Count == 1)
+                {
+                    return foreignKeyProps[0]; // 単一の外部キーが見つかった場合
+                }
+            }
         }
 
-        // 外部キープロパティが見つからない場合
-        return null;
+        return null; // 対応する外部キープロパティが見つからなかった
     }
 
     /// <summary>
@@ -932,31 +936,23 @@ public class EntityScanner
     /// <param name="navigationValue">ナビゲーションプロパティの値</param>
     private void SetForeignKeyProperty(object entity, PropertyInfo navigationProperty, object navigationValue)
     {
-        var entityType = entity.GetType();
-        var navValueType = navigationValue.GetType();
-
-        // 一般的な外部キー命名パターン
-        var possibleFkNames = new[]
+        if (entity == null || navigationProperty == null || navigationValue == null)
         {
-            $"{navigationProperty.Name}Id",
-            $"{navValueType.Name}Id"
-        };
+            return;
+        }
 
-        foreach (var fkName in possibleFkNames)
+        // 対応する外部キープロパティを探す
+        var fkProperty = FindForeignKeyProperty(navigationProperty);
+        if (fkProperty != null && fkProperty.CanWrite)
         {
-            var fkProperty = entityType.GetProperty(fkName);
-            if (fkProperty != null && IsValidForeignKeyProperty(fkProperty))
+            // 主キーの値を取得
+            var pkProperty = FindPrimaryKeyProperty(navigationValue);
+            if (pkProperty != null)
             {
-                // 主キーの値を取得
-                var pkProperty = FindPrimaryKeyProperty(navigationValue);
-                if (pkProperty != null)
-                {
-                    var pkValue = pkProperty.GetValue(navigationValue);
-
-                    // 外部キーに主キーの値を設定
-                    fkProperty.SetValue(entity, pkValue);
-                    break;
-                }
+                var pkValue = pkProperty.GetValue(navigationValue);
+                // 外部キーに主キーの値を設定
+                fkProperty.SetValue(entity, pkValue);
+                Debug.WriteLine($"外部キーを設定: {entity.GetType().Name}.{fkProperty.Name} = {pkValue}");
             }
         }
     }
