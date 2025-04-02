@@ -120,6 +120,29 @@ public class EntityScanner
         return result;
     }
 
+    public IEnumerable<TEntity> GetSeedEntities<TEntity>() where TEntity : class
+    {
+        var entities = GetEntities<TEntity>().ToList();
+        var result = new List<TEntity>();
+
+        foreach (var entity in entities)
+        {
+            // ナビゲーションプロパティを含まない新しいインスタンスを作成
+            var clone = Activator.CreateInstance<TEntity>();
+
+            // 基本プロパティのみをコピー
+            foreach (var prop in typeof(TEntity).GetProperties()
+                         .Where(p => p.CanWrite && IsBasicType(p.PropertyType)))
+            {
+                prop.SetValue(clone, prop.GetValue(entity));
+            }
+
+            result.Add(clone);
+        }
+
+        return result;
+    }
+
     /// <summary>
     ///     登録されているすべてのエンティティをDbContextに追加します。
     /// </summary>
@@ -251,6 +274,44 @@ public class EntityScanner
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// 登録されているすべてのエンティティをModelBuilderのHasDataに適用します。
+    /// </summary>
+    /// <param name="modelBuilder">ModelBuilder</param>
+    public void ApplyToModelBuilder(ModelBuilder modelBuilder)
+    {
+        if (modelBuilder == null)
+        {
+            throw new ArgumentNullException(nameof(modelBuilder));
+        }
+
+        foreach (var kvp in _entities)
+        {
+            var entityType = kvp.Key;
+
+            // GetSeedEntitiesメソッドを呼び出し
+            var method = typeof(EntityScanner)
+                .GetMethod(nameof(GetSeedEntities))
+                .MakeGenericMethod(entityType);
+
+            var seedEntities = method.Invoke(this, null);
+
+            // EntityTypeBuilder<T>を取得
+            var entityMethod = typeof(ModelBuilder)
+                .GetMethod("Entity")
+                .MakeGenericMethod(entityType);
+
+            var entityBuilder = entityMethod.Invoke(modelBuilder, null);
+
+            // HasDataメソッドを取得
+            var hasDataMethod = entityBuilder.GetType()
+                .GetMethod("HasData", new[] { seedEntities.GetType() });
+
+            // HasDataを呼び出し
+            hasDataMethod.Invoke(entityBuilder, new[] { seedEntities });
         }
     }
 
