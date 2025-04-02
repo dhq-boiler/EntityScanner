@@ -7,7 +7,7 @@
 		<AssemblyName>EntityScanner</AssemblyName>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<PackageId>EntityScanner</PackageId>
-		<Version>0.4.1</Version>
+		<Version>0.4.2</Version>
 		<Authors>dhq_boiler</Authors>
 		<Description>Seed data management utility for Entity Framework Core. Generates seed data for EF Core from hierarchical object models and automatically manages foreign keys.</Description>
 		<PackageTags>entityframework;efcore;seed;data;migration</PackageTags>
@@ -18,7 +18,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="3.1.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.3" />
 	</ItemGroup>
 
 </Project>
