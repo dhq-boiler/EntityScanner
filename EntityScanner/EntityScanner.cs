@@ -356,7 +356,6 @@ public class EntityScanner
                 var entityMethod = typeof(ModelBuilder).GetMethods()
                     .Where(m => m.Name == "Entity")
                     .Where(m => m.IsGenericMethod)
-                    .Where(m => m.GetParameters().Length == 0)
                     .FirstOrDefault();
 
                 if (entityMethod == null)
