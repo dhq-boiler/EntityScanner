@@ -222,6 +222,21 @@ public class EntityScanner
                         prop.SetValue(clone, value);
                         Debug.WriteLine($"  プロパティをコピー: {prop.Name} = {value}");
                     }
+                    else if (IsNavigationProperty(prop))
+                    {
+                        //ナビゲーションプロパティをForeignKey属性で指定しているプロパティを探す
+                        var fkProp = FindForeignKeyProperty(prop);
+                        if (fkProp != null)
+                        {
+                            var value = fkProp.GetValue(entity);
+                            fkProp.SetValue(clone, value);
+                            Debug.WriteLine($"  プロパティをコピー: {fkProp.Name} = {value}");
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"  スキップしたプロパティ: {prop.Name} (ナビゲーションプロパティ)");
+                        }
+                    }
                     else
                     {
                         Debug.WriteLine($"  スキップしたプロパティ: {prop.Name} (ナビゲーションプロパティ)");
@@ -233,6 +248,74 @@ public class EntityScanner
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// ナビゲーションプロパティに関連付けられた外部キープロパティを探す
+    /// </summary>
+    /// <param name="navigationProp">ナビゲーションプロパティ</param>
+    /// <returns>関連付けられた外部キープロパティ、見つからない場合はnull</returns>
+    private PropertyInfo FindForeignKeyProperty(PropertyInfo navigationProp)
+    {
+        if (navigationProp == null)
+        {
+            return null;
+        }
+
+        var declaringType = navigationProp.DeclaringType;
+        if (declaringType == null)
+        {
+            return null;
+        }
+
+        // ForeignKeyAttributeが指定されている場合、それを使用
+        var foreignKeyAttr = navigationProp.GetCustomAttributes(true)
+            .FirstOrDefault(a => a.GetType().Name == "ForeignKeyAttribute");
+
+        if (foreignKeyAttr != null)
+        {
+            // ForeignKeyAttributeからプロパティ名を取得
+            var foreignKeyName = foreignKeyAttr.GetType().GetProperty("Name")?.GetValue(foreignKeyAttr) as string;
+            if (!string.IsNullOrEmpty(foreignKeyName))
+            {
+                return declaringType.GetProperty(foreignKeyName);
+            }
+        }
+
+        // 命名規則に基づいて外部キープロパティを探す
+        // 一般的な規則: NavigationPropertyName + "Id"
+        var conventionalFkName = $"{navigationProp.Name}Id";
+        var fkProperty = declaringType.GetProperty(conventionalFkName);
+        if (fkProperty != null && IsValidForeignKeyProperty(fkProperty))
+        {
+            return fkProperty;
+        }
+
+        // 他の一般的な命名規則も試す (NavigationPropertyTypeNameにも対応)
+        if (navigationProp.PropertyType != null)
+        {
+            var navTypeName = navigationProp.PropertyType.Name;
+            conventionalFkName = $"{navTypeName}Id";
+            fkProperty = declaringType.GetProperty(conventionalFkName);
+            if (fkProperty != null && IsValidForeignKeyProperty(fkProperty))
+            {
+                return fkProperty;
+            }
+        }
+
+        // 見つからない場合は、"Id"で終わるすべてのプロパティを検索
+        var potentialFkProperties = declaringType.GetProperties()
+            .Where(p => p.Name.EndsWith("Id") && IsValidForeignKeyProperty(p))
+            .ToList();
+
+        if (potentialFkProperties.Count == 1)
+        {
+            // 候補が1つだけなら、それを返す
+            return potentialFkProperties[0];
+        }
+
+        // 外部キープロパティが見つからない場合
+        return null;
     }
 
     /// <summary>
