@@ -13,7 +13,7 @@ public class EntityScannerTests
         // SQLiteを使用するための設定
         var connectionString = $"Data Source=LibraryTestDb_{Guid.NewGuid()}.db";
         _options = new DbContextOptionsBuilder<LibraryDbContext>()
-            .UseSqlite(connectionString)  // InMemoryからSQLiteに変更
+            .UseSqlite(connectionString) // InMemoryからSQLiteに変更
             .EnableSensitiveDataLogging()
             .Options;
 
@@ -30,9 +30,9 @@ public class EntityScannerTests
         _entityScanner.Clear();
     }
 
-    private DbContextOptions<LibraryDbContext> _options = null;
-    private string _connectionString;  // SQLiteファイル名を保持するための変数を追加
-    private EntityScanner _entityScanner = null;
+    private DbContextOptions<LibraryDbContext> _options;
+    private string _connectionString; // SQLiteファイル名を保持するための変数を追加
+    private EntityScanner _entityScanner;
 
     [Test]
     public void RegisterEntity_ShouldAddEntityToCollection()
@@ -184,7 +184,7 @@ public class EntityScannerTests
             ISBN = "1234567890",
             PublicationYear = 2022,
             Category = category,
-            Publisher = publisher  // Set the Publisher navigation property
+            Publisher = publisher // Set the Publisher navigation property
         };
 
         _entityScanner.RegisterEntity(book);
@@ -266,9 +266,9 @@ public class EntityScannerTests
         var shelf = new Shelf { Id = 1, ShelfCode = "A1", Location = "First Floor", Library = library };
 
         var category = new Category
-        { Id = 1, Name = "Computer Science", Description = "Books about programming and computer science" };
+            { Id = 1, Name = "Computer Science", Description = "Books about programming and computer science" };
         var publisher = new Publisher
-        { Id = 1, Name = "Tech Books Inc.", Address = "456 Tech Boulevard, Silicon Valley, CA" };
+            { Id = 1, Name = "Tech Books Inc.", Address = "456 Tech Boulevard, Silicon Valley, CA" };
         var book = new Book
         {
             Id = 1,

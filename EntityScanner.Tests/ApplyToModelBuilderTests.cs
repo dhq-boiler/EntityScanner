@@ -1,65 +1,81 @@
-﻿//using EntityScanner.Tests.DbContexts;
-//using EntityScanner.Tests.Entities;
-//using Microsoft.EntityFrameworkCore;
-//using NUnit.Framework;
-//using System;
-//using System.Linq;
-//using System.IO;
-//using System.Reflection;
+﻿using EntityScanner.Tests.DbContexts;
+using EntityScanner.Tests.Entities;
+using Microsoft.EntityFrameworkCore;
 
-//namespace EntityScanner.Tests;
+namespace EntityScanner.Tests;
 
-//[TestFixture]
-//public class ApplyToModelBuilderTests
-//{
-//    [SetUp]
-//    public void Setup()
-//    {
-//        // SQLiteを使用するためのユニークなDB接続文字列を用意
-//        var connectionString = $"Data Source=ApplyToModelBuilderTests_{Guid.NewGuid()}.db";
-//        _options = new DbContextOptionsBuilder<LibraryDbContext>()
-//            .UseSqlite(connectionString, options =>
-//            {
-//                // SQLite接続オプションを調整
-//                options.MigrationsAssembly(typeof(LibraryDbContext).Assembly.FullName);
-//                // コマンドタイムアウトを延長
-//                options.CommandTimeout(60);
-//            })
-//            .EnableSensitiveDataLogging() // デバッグのためにクエリログを詳細に
-//            .EnableDetailedErrors()       // 詳細なエラーを有効に
-//            .Options;
+[TestFixture]
+public class ApplyToModelBuilderTests
+{
+    [SetUp]
+    public void Setup()
+    {
+        // SQLiteを使用するためのユニークなDB接続文字列を用意
+        var connectionString = $"Data Source=ApplyToModelBuilderTests_{Guid.NewGuid()}.db";
+        _options = new DbContextOptionsBuilder<LibraryDbContext>()
+            .UseSqlite(connectionString, options =>
+            {
+                // SQLite接続オプションを調整
+                options.MigrationsAssembly(typeof(LibraryDbContext).Assembly.FullName);
+                // コマンドタイムアウトを延長
+                options.CommandTimeout(60);
+            })
+            .EnableSensitiveDataLogging() // デバッグのためにクエリログを詳細に
+            .EnableDetailedErrors() // 詳細なエラーを有効に
+            .Options;
 
-//        // 接続文字列を保存
-//        _connectionString = connectionString;
+        // 接続文字列を保存
+        _connectionString = connectionString;
 
-//        // EntityScannerを初期化
-//        _entityScanner = new EntityScanner();
-//    }
+        // EntityScannerを初期化
+        _entityScanner = new EntityScanner();
+    }
 
-//    [TearDown]
-//    public void TearDown()
-//    {
-//        _entityScanner.Clear();
+    [TearDown]
+    public void TearDown()
+    {
+        _entityScanner.Clear();
 
-//        // SQLiteファイルを削除
-//        var dbFileName = _connectionString.Replace("Data Source=", "");
-//        if (File.Exists(dbFileName))
-//        {
-//            try
-//            {
-//                File.Delete(dbFileName);
-//            }
-//            catch
-//            {
-//                // ファイル削除に失敗しても無視
-//            }
-//        }
-//    }
+        // SQLiteファイルを削除
+        var dbFileName = _connectionString.Replace("Data Source=", "");
+        if (File.Exists(dbFileName))
+        {
+            try
+            {
+                File.Delete(dbFileName);
+            }
+            catch
+            {
+                // ファイル削除に失敗しても無視
+            }
+        }
+    }
 
-//    private DbContextOptions<LibraryDbContext> _options = null;
-//    private string _connectionString;
-//    private EntityScanner _entityScanner = null;
+    private DbContextOptions<LibraryDbContext> _options;
+    private string _connectionString;
+    private EntityScanner _entityScanner;
 
+    [Test]
+    public async Task ApplyAToModelBuilder_DuplicateRecords_ShouldUpdate()
+    {
+        var category = new Category { Id = 1, Name = "Fiction", Description = "Fiction books" };
+        var category2 = new Category { Id = 1, Name = "Non-Fiction", Description = "Non-fiction books" };
+
+        _entityScanner.DuplicateBehavior = DuplicateEntityBehavior.Update;
+
+        _entityScanner.RegisterEntity(category);
+        _entityScanner.RegisterEntity(category2);
+
+        using (var context = new TestLibraryDbContext(_options, _entityScanner))
+        {
+            await context.Database.EnsureCreatedAsync();
+
+            var categories = context.Categories.ToList();
+            Assert.That(categories, Has.Count.EqualTo(1), "Category should be seeded");
+            Assert.That(categories.Any(c => c.Name == "Non-Fiction"), Is.True, "Non-Fiction category should be seeded");
+        }
+    }
+}
 //    [Test]
 //    public async Task ApplyToModelBuilder_WithSimpleEntity_ShouldApplySeedData()
 //    {
@@ -342,7 +358,7 @@
 //            // データベースを作成（この過程でOnModelCreatingが呼ばれ、シードデータが適用される）
 //            await testContext.Database.EnsureCreatedAsync();
 //            //testContext.GetModelBuilderWithBaseConfiguration();
-            
+
 //        }
 
 //        // 新しい通常のコンテキストを返す（テスト検証用）
@@ -441,34 +457,37 @@
 //    }
 //}
 
-//// テスト用のLibraryDbContextのサブクラス
-//public class TestLibraryDbContext : LibraryDbContext
-//{
-//    private readonly EntityScanner _entityScanner;
+// テスト用のLibraryDbContextのサブクラス
+public class TestLibraryDbContext : LibraryDbContext
+{
+    private readonly EntityScanner _entityScanner;
 
-//    public TestLibraryDbContext(DbContextOptions<LibraryDbContext> options, EntityScanner entityScanner)
-//        : base(options)
-//    {
-//        _entityScanner = entityScanner ?? throw new ArgumentNullException(nameof(entityScanner));
-//    }
+    public TestLibraryDbContext(DbContextOptions<LibraryDbContext> options, EntityScanner entityScanner)
+        : base(options)
+    {
+        _entityScanner = entityScanner ?? throw new ArgumentNullException(nameof(entityScanner));
+    }
 
-//    protected override void OnModelCreating(ModelBuilder modelBuilder)
-//    {
-//        if (modelBuilder == null) throw new ArgumentNullException(nameof(modelBuilder));
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        if (modelBuilder == null)
+        {
+            throw new ArgumentNullException(nameof(modelBuilder));
+        }
 
-//        // 基底クラスのOnModelCreatingを呼び出して、基本的なモデル構成を適用
-//        base.OnModelCreating(modelBuilder);
+        // 基底クラスのOnModelCreatingを呼び出して、基本的なモデル構成を適用
+        base.OnModelCreating(modelBuilder);
 
-//        // エンティティスキャナーを使用してシードデータを適用
-//        try
-//        {
-//            _entityScanner.ApplyToModelBuilder(modelBuilder);
-//        }
-//        catch (Exception ex)
-//        {
-//            // ログ出力などのエラーハンドリング
-//            Console.WriteLine($"シードデータ適用中にエラーが発生: {ex.Message}");
-//            throw; // 再スロー
-//        }
-//    }
-//}
+        // エンティティスキャナーを使用してシードデータを適用
+        try
+        {
+            _entityScanner.ApplyToModelBuilder(modelBuilder);
+        }
+        catch (Exception ex)
+        {
+            // ログ出力などのエラーハンドリング
+            Console.WriteLine($"シードデータ適用中にエラーが発生: {ex.Message}");
+            throw; // 再スロー
+        }
+    }
+}

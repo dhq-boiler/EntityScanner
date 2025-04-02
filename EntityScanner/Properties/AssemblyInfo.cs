@@ -5,7 +5,9 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("EntityScanner")]
-[assembly: AssemblyDescription("Seed data management utility for Entity Framework Core. Automatically manages foreign keys and hierarchical object relationships.")]
+[assembly:
+    AssemblyDescription(
+        "Seed data management utility for Entity Framework Core. Automatically manages foreign keys and hierarchical object relationships.")]
 [assembly: AssemblyConfiguration("Release")]
 [assembly: AssemblyCompany("dhq_boiler")]
 [assembly: AssemblyProduct("EntityScanner")]
@@ -28,5 +30,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("0.3.3.0")]
-[assembly: AssemblyFileVersion("0.3.3.0")]
+[assembly: AssemblyVersion("0.3.4.0")]
+[assembly: AssemblyFileVersion("0.3.4.0")]

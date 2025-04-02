@@ -21,12 +21,12 @@ public class EntityScanner
     private readonly Dictionary<Type, IList<object>> _entities = new();
     private readonly HashSet<object> _processedEntities = new();
 
-    public DuplicateEntityBehavior DuplicateBehavior { get; set; } = DuplicateEntityBehavior.ThrowException;
-
     public EntityScanner(DuplicateEntityBehavior behavior = DuplicateEntityBehavior.ThrowException)
     {
         DuplicateBehavior = behavior;
     }
+
+    public DuplicateEntityBehavior DuplicateBehavior { get; set; } = DuplicateEntityBehavior.ThrowException;
 
     /// <summary>
     ///     エンティティを登録します。ナビゲーションプロパティも再帰的に処理されます。
@@ -197,7 +197,8 @@ public class EntityScanner
                         var pkProperty = FindPrimaryKeyProperty(entity);
                         if (pkProperty == null)
                         {
-                            throw new InvalidOperationException($"Could not find primary key for type {entityType.Name}");
+                            throw new InvalidOperationException(
+                                $"Could not find primary key for type {entityType.Name}");
                         }
 
                         var pkValue = pkProperty.GetValue(entity);
@@ -213,7 +214,8 @@ public class EntityScanner
                             switch (DuplicateBehavior)
                             {
                                 case DuplicateEntityBehavior.ThrowException:
-                                    throw new InvalidOperationException($"An entity with key {pkValue} is already being tracked");
+                                    throw new InvalidOperationException(
+                                        $"An entity with key {pkValue} is already being tracked");
 
                                 case DuplicateEntityBehavior.Ignore:
                                     continue; // 既存のエンティティを無視して次へ
@@ -246,7 +248,7 @@ public class EntityScanner
                                     var properties = entityType.GetProperties()
                                         .Where(p => p.CanWrite && !IsNavigationProperty(p));
 
-                                    bool hasChanges = false;
+                                    var hasChanges = false;
                                     foreach (var prop in properties)
                                     {
                                         var newValue = prop.GetValue(entity);
@@ -264,6 +266,7 @@ public class EntityScanner
                                         throw new InvalidOperationException(
                                             $"An entity with the same primary key {pkValue} but different properties already exists.");
                                     }
+
                                     break;
 
                                 case DuplicateEntityBehavior.Update:
@@ -293,7 +296,7 @@ public class EntityScanner
     }
 
     /// <summary>
-    /// 登録されているすべてのエンティティをModelBuilderのHasDataに適用します。
+    ///     登録されているすべてのエンティティをModelBuilderのHasDataに適用します。
     /// </summary>
     /// <param name="modelBuilder">ModelBuilder</param>
     public void ApplyToModelBuilder(ModelBuilder modelBuilder)
@@ -385,7 +388,7 @@ public class EntityScanner
 
                 Debug.WriteLine($"HasDataメソッドを呼び出します: {hasDataMethod.Name}");
                 // HasDataメソッドを呼び出し
-                hasDataMethod.Invoke(entityBuilder, new object[] { seedDataArray });
+                hasDataMethod.Invoke(entityBuilder, new[] { seedDataArray });
                 Debug.WriteLine($"{entityType.Name}のHasDataメソッドの呼び出しが完了しました");
             }
             catch (Exception ex)
@@ -397,6 +400,7 @@ public class EntityScanner
                     Debug.WriteLine($"内部例外: {ex.InnerException.Message}");
                     Debug.WriteLine($"内部例外詳細: {ex.InnerException.StackTrace}");
                 }
+
                 throw new InvalidOperationException(
                     $"Error applying seed data for entity type {entityType.Name}: {ex.Message}", ex);
             }
@@ -444,17 +448,19 @@ public class EntityScanner
                 {
                     result.Add(group.Last());
                 }
+
                 Debug.WriteLine($"{entityType.Name}の重複エンティティを更新モードで処理しました: {entities.Count} -> {result.Count}");
                 break;
 
             case DuplicateEntityBehavior.AddAlways:
                 // AddAlwaysの場合、PKを変更する必要があるが、HasDataではPKは変更できないため
                 // 警告を出して最初のエンティティのみ残す
-                Debug.WriteLine($"警告: ModelBuilder.HasDataでは重複PKを持つエンティティを追加できません。最初のエンティティのみ使用します。");
+                Debug.WriteLine("警告: ModelBuilder.HasDataでは重複PKを持つエンティティを追加できません。最初のエンティティのみ使用します。");
                 foreach (var group in groupedEntities)
                 {
                     result.Add(group.First());
                 }
+
                 break;
 
             default:
@@ -490,11 +496,18 @@ public class EntityScanner
             .GetMethod(nameof(GetSeedEntities))
             .MakeGenericMethod(entityType);
 
-        var typedEntities = getSeedEntitiesMethod.Invoke(this, null);
+        //var typedEntities = getSeedEntitiesMethod.Invoke(this, null);
 
         // 正しい型の配列を作成
         var arrayType = entityType.MakeArrayType();
+        //空の配列が返される
         var array = Array.CreateInstance(entityType, seedData.Count());
+
+        //seedDataはDictionary<string, object>のリスト
+        //entityTypeのプロパティ名と値を保持している
+        //これらをリフレクションを使って、arrayにコピーしていく
+        array = ConvertSeedDataToTypedArrayInternal(entityType, seedData);
+
 
         // IEnumerable<T>をT[]に変換
         var castMethod = typeof(Enumerable)
@@ -505,11 +518,75 @@ public class EntityScanner
             .GetMethod("ToArray")
             .MakeGenericMethod(entityType);
 
-        var castedCollection = castMethod.Invoke(null, new object[] { typedEntities });
-        var result = toArrayMethod.Invoke(null, new object[] { castedCollection });
+        var castedCollection = castMethod.Invoke(null, new object[] { array });
+        var result = toArrayMethod.Invoke(null, new[] { castedCollection });
 
         return result;
     }
+
+    // シードデータを正しい型の配列に変換するヘルパーメソッド
+    private Array ConvertSeedDataToTypedArrayInternal(Type entityType, IEnumerable<object> seedData)
+    {
+        Debug.WriteLine($"シードデータを{entityType.Name}の配列に変換します");
+
+        // 正しい型の配列を作成
+        var seedDataList = seedData.ToList();
+        var array = Array.CreateInstance(entityType, seedDataList.Count);
+
+        // seedDataはDictionary<string, object>のリスト
+        // これらをリフレクションを使って、entityType型のオブジェクトに変換
+        for (var i = 0; i < seedDataList.Count; i++)
+        {
+            var dataItem = seedDataList[i] as IDictionary<string, object>;
+            if (dataItem == null)
+            {
+                Debug.WriteLine($"警告: インデックス{i}のシードデータをDictionaryとして取得できませんでした");
+                continue;
+            }
+
+            // entityTypeの新しいインスタンスを作成
+            var instance = Activator.CreateInstance(entityType);
+            Debug.WriteLine($"新しい{entityType.Name}インスタンスを作成しました");
+
+            // プロパティを設定
+            foreach (var kvp in dataItem)
+            {
+                var property = entityType.GetProperty(kvp.Key);
+                if (property != null && property.CanWrite)
+                {
+                    try
+                    {
+                        // 値の型変換が必要な場合は変換を行う
+                        var value = kvp.Value;
+                        if (value != null && property.PropertyType != value.GetType() &&
+                            value.GetType() != Nullable.GetUnderlyingType(property.PropertyType))
+                        {
+                            value = Convert.ChangeType(value,
+                                Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType);
+                        }
+
+                        property.SetValue(instance, value);
+                        Debug.WriteLine($"  プロパティを設定: {kvp.Key} = {kvp.Value}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"  プロパティ設定エラー: {kvp.Key} - {ex.Message}");
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine($"  プロパティが見つからないかWriteableではありません: {kvp.Key}");
+                }
+            }
+
+            // 配列にインスタンスを設定
+            array.SetValue(instance, i);
+        }
+
+        Debug.WriteLine($"{array.Length}個のアイテムを持つ{entityType.Name}[]を作成しました");
+        return array;
+    }
+
 
     // 適切なHasDataメソッドを探すヘルパーメソッド
     private MethodInfo FindApplicableHasDataMethod(Type builderType, Type entityType)
@@ -577,8 +654,8 @@ public class EntityScanner
     {
         // データベース内の最大キー値を取得し、新しいキーを生成
         // 注意: これは簡単な実装で、実際のユースケースでは more robust な実装が必要
-        int attempts = 0;
-        object newKey = originalKey;
+        var attempts = 0;
+        var newKey = originalKey;
 
         while (dbSet.Find(newKey) != null && attempts < 100)
         {

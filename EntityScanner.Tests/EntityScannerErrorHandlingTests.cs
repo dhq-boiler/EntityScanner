@@ -1,9 +1,6 @@
 ﻿using EntityScanner.Tests.DbContexts;
 using EntityScanner.Tests.Entities;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace EntityScanner.Tests;
 
@@ -53,9 +50,9 @@ public class EntityScannerErrorHandlingTests
         }
     }
 
-    private DbContextOptions<LibraryDbContext> _options = null;
+    private DbContextOptions<LibraryDbContext> _options;
     private string _connectionString;
-    private EntityScanner _entityScanner = null;
+    private EntityScanner _entityScanner;
 
     [Test]
     public void ApplyToContext_WithNullContext_ShouldThrowArgumentNullException()
@@ -145,7 +142,8 @@ public class EntityScannerErrorHandlingTests
 
             // SaveChanges時に検証例外が発生する
             var ex = Assert.Throws<DbUpdateException>(() => context.SaveChanges());
-            Assert.That(ex.InnerException.Message, Does.Contain("NOT NULL constraint failed") | Does.Contain("cannot be null"));
+            Assert.That(ex.InnerException.Message,
+                Does.Contain("NOT NULL constraint failed") | Does.Contain("cannot be null"));
         }
     }
 
@@ -169,7 +167,8 @@ public class EntityScannerErrorHandlingTests
 
             // SaveChanges時に検証例外が発生する
             var ex = Assert.Throws<DbUpdateException>(() => context.SaveChanges());
-            Assert.That(ex.InnerException.Message, Does.Contain("NOT NULL constraint failed") | Does.Contain("cannot be null"));
+            Assert.That(ex.InnerException.Message,
+                Does.Contain("NOT NULL constraint failed") | Does.Contain("cannot be null"));
         }
     }
 
@@ -197,7 +196,8 @@ public class EntityScannerErrorHandlingTests
 
             // SaveChanges時に外部キー制約違反の例外が発生する
             var ex = Assert.Throws<DbUpdateException>(() => context.SaveChanges());
-            Assert.That(ex.InnerException.Message, Does.Contain("FOREIGN KEY constraint failed") | Does.Contain("foreign key"));
+            Assert.That(ex.InnerException.Message,
+                Does.Contain("FOREIGN KEY constraint failed") | Does.Contain("foreign key"));
         }
     }
 
@@ -230,8 +230,8 @@ public class EntityScannerErrorHandlingTests
             var ex = Assert.Throws<DbUpdateException>(() => context.SaveChanges());
             // いくつかのデータベースプロバイダーで見られるエラーメッセージをチェック
             Assert.That(ex.InnerException.Message, Does.Contain("String or binary data would be truncated") |
-                                                  Does.Contain("data too long") |
-                                                  Does.Contain("String data, right truncation"));
+                                                   Does.Contain("data too long") |
+                                                   Does.Contain("String data, right truncation"));
         }
     }
 
@@ -291,8 +291,8 @@ public class EntityScannerErrorHandlingTests
             // SaveChanges時にユニーク制約違反の例外が発生する
             var ex = Assert.Throws<DbUpdateException>(() => context.SaveChanges());
             Assert.That(ex.InnerException.Message, Does.Contain("UNIQUE constraint failed") |
-                                                 Does.Contain("duplicate key value") |
-                                                 Does.Contain("violation of UNIQUE KEY constraint"));
+                                                   Does.Contain("duplicate key value") |
+                                                   Does.Contain("violation of UNIQUE KEY constraint"));
         }
     }
 
