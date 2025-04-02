@@ -144,6 +144,15 @@ public class EntityScannerTests
 
         var bookAuthors = _entityScanner.GetEntities<BookAuthor>().ToList();
         Assert.That(bookAuthors, Has.Count.EqualTo(1), "Join entity should be registered");
+
+        Assert.That(bookAuthors[0], Has.Property("BookId").Not.Null);
+        Assert.That(bookAuthors[0], Has.Property("AuthorId").Not.Null);
+
+        var seedBookAuthors = _entityScanner.GetSeedEntities<BookAuthor>().ToList();
+        Assert.That(seedBookAuthors, Has.Count.EqualTo(1), "Join entity should be registered");
+
+        Assert.That(seedBookAuthors[0], Has.Property("BookId").Not.Null);
+        Assert.That(seedBookAuthors[0], Has.Property("AuthorId").Not.Null);
     }
 
     [Test]
